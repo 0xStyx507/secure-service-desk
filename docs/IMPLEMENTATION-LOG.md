@@ -263,3 +263,34 @@ emitía advertencias por su runtime Node.js 20.
 Si Trivy no produce un SARIF, el upload se omite, pero el resultado del paso de
 Trivy conserva el estado fallido. El rollback es restaurar CodeQL v3 y
 `if: always()`, aceptando de nuevo las advertencias y el error secundario.
+
+## 2026-07-31 — Instalación pnpm reproducible en Docker
+
+### Motivo
+
+Tras convertir el repositorio en un workspace, el lockfile pasó a registrar el
+override de seguridad definido en `pnpm-workspace.yaml`. Docker copiaba solo los
+manifests raíz, por lo que pnpm recibía una configuración vacía y detenía
+correctamente `--frozen-lockfile` con `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`.
+
+### Decisión y cambio
+
+- Copiar `pnpm-workspace.yaml` antes de instalar en las etapas build y runtime.
+- Filtrar explícitamente `secure-service-desk-api` para no instalar la Demo UI
+  dentro de la imagen del backend.
+- Mantener `--frozen-lockfile`, `--ignore-scripts` y `--prod` en runtime.
+
+### Validación
+
+- El error se reprodujo en Docker con el Dockerfile anterior.
+- Una imagen de diagnóstico con la configuración propuesta instaló el lockfile
+  congelado y compiló NestJS correctamente.
+- La imagen completa construyó correctamente y la inspección runtime confirmó
+  NestJS disponible, con la Demo UI y TypeScript ausentes.
+
+### Riesgo y rollback
+
+El selector depende del nombre estable del paquete raíz. Si este cambia, Docker
+fallará de forma visible en la instalación en vez de incluir paquetes no
+deseados. El rollback es retirar el filtro y conservar la copia del workspace,
+asumiendo entonces una instalación más amplia.
