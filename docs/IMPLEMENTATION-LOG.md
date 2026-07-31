@@ -235,3 +235,31 @@ producto frontend de gran alcance.
 
 Retirar `apps/web`, sus cuatro scripts raíz y los gates web de CI. No existen
 migraciones ni cambios de datos asociados.
+
+## 2026-07-31 — Robustez de la carga SARIF en CI
+
+### Motivo
+
+El upload de CodeQL se ejecutaba con `if: always()` incluso cuando Trivy fallaba
+antes de generar el archivo SARIF. Esto añadía el error secundario `Path does
+not exist` y ocultaba la causa primaria del escaneo. Además, CodeQL Action v3
+emitía advertencias por su runtime Node.js 20.
+
+### Decisión y cambio
+
+- Actualizar ambos uploads a CodeQL Action v4.37.4 mediante SHA inmutable.
+- Condicionar cada upload a la existencia de su SARIF con `hashFiles`.
+- Conservar `exit-code: 1` en Trivy para que hallazgos altos o críticos y fallos
+  reales del escáner sigan bloqueando el job.
+
+### Validación
+
+- Los nombres evaluados por `hashFiles` coinciden con los `output` de Trivy.
+- Workflow formateado y validado mediante inspección del diff.
+- La confirmación definitiva corresponde al siguiente run de `Secure CI`.
+
+### Riesgo y rollback
+
+Si Trivy no produce un SARIF, el upload se omite, pero el resultado del paso de
+Trivy conserva el estado fallido. El rollback es restaurar CodeQL v3 y
+`if: always()`, aceptando de nuevo las advertencias y el error secundario.
