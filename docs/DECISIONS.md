@@ -162,3 +162,20 @@ arquitectura objetivo única es [RESTRUCTURING-V2.md](RESTRUCTURING-V2.md).
   `dist/main.js` y `dist/worker.js`, valida readiness y terminación por señal.
 - **Límite:** la suite no simula TLS, red distribuida ni servicios administrados
   de producción.
+
+## ADR-017 — SPA de demostración separada y ligera
+
+- **Estado:** primer corte implementado.
+- **Decisión:** mantener una SPA React/TypeScript en `apps/web`, compilada por
+  Vite y consumiendo exclusivamente los contratos HTTP existentes.
+- **Motivo:** hacer demostrables los flujos de seguridad y tickets sin acoplar
+  presentación al monolito NestJS ni introducir otro backend.
+- **UI:** componentes y estilos propios, sin design system externo; navegación,
+  iconos SVG y estados responsive se mantienen dentro del paquete web.
+- **Sesión:** access token en memoria, refresh token solo en cookie HttpOnly y
+  token CSRF en `sessionStorage` para restaurar la pestaña.
+- **Alternativas descartadas:** renderizado server-side no aporta valor al
+  dashboard autenticado; un modo mock podría mostrar una experiencia que no
+  ejerce las garantías reales de la API.
+- **Límite:** la demo inicial cubre autenticación, dashboard y tickets; no
+  presenta todavía adjuntos, comentarios, reportes o gobierno.

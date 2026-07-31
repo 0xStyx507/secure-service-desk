@@ -1,3 +1,9 @@
+packages:
+  - 'apps/*'
+
+overrides:
+  '@nestjs/swagger>js-yaml': 5.2.2
+
 allowBuilds:
   '@scarf/scarf': false
   cpu-features: false

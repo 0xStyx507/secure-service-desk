@@ -173,3 +173,65 @@ de supply chain sin depender de tags flotantes.
 La actualización también cambia la versión predeterminada del CLI Trivy. Si
 aparece una incompatibilidad distinta, el rollback es restaurar el SHA anterior
 solo después de fijar explícitamente una versión válida de `setup-trivy`.
+
+## 2026-07-31 — Primer corte de la Demo UI
+
+### Objetivo
+
+Permitir que una persona evalúe el service desk mediante una experiencia visual
+breve, sin depender únicamente de Swagger y sin convertir el repositorio en un
+producto frontend de gran alcance.
+
+### Decisiones
+
+- Crear `apps/web` como segundo paquete del workspace pnpm.
+- Usar React, TypeScript y Vite sin framework SSR ni librería visual externa.
+- Consumir la API real; no incorporar datos mock que aparenten controles no
+  ejecutados.
+- Mantener el access token en memoria y solo el token CSRF en `sessionStorage`.
+- Limitar el corte a autenticación, cola, filtros, creación, detalle y resumen
+  de notificaciones.
+
+### Cambios
+
+- Se añadió una pantalla de acceso/registro que explica JWT, auditoría y jobs.
+- Se añadió un dashboard responsive con métricas claramente acotadas, actividad
+  reciente y notificaciones.
+- La cola implementa búsqueda, filtros, paginación y estados de carga/error.
+- Crear y abrir tickets usa los DTO y respuestas existentes.
+- El cliente HTTP procesa Problem Details, rota la sesión y reintenta solo una
+  vez tras un `401`.
+- CI incorpora typecheck, pruebas y build del paquete web.
+- `docs/DEMO-UI.md` documenta alcance, UX, sesión y despliegue público.
+
+### Validación
+
+- TypeScript estricto del frontend: correcto.
+- Pruebas de interacción, sesión, contratos y workspace: 15 escenarios correctos.
+- Bundle de producción: 217 kB JavaScript y 20 kB CSS antes de gzip.
+- No se añadió ningún secreto ni credencial demo al bundle.
+- El gate `pnpm audit:prod` y Trivy filesystem cubren las dependencias runtime
+  del workspace; las herramientas de desarrollo quedan fijadas por lockfile y
+  monitorizadas por Dependabot sin confundirlas con el artefacto desplegable.
+- El build rechaza rutas API cross-origin, incluidas variantes con barras
+  invertidas que el parser URL del navegador podría normalizar.
+- `js-yaml`, dependencia transitiva runtime de Swagger, se fija de forma
+  dirigida en `5.2.2` para corregir su advisory alto sin alterar consumidores
+  incompatibles del mismo paquete.
+
+### Riesgos y evolución
+
+- El frontend aún no cubre comentarios, adjuntos, workflow, PDFs o gobierno.
+- Una demo pública necesita reverse proxy del mismo sitio, HTTPS, datos
+  sintéticos y un proceso de restablecimiento aislado.
+- El audit completo reporta `brace-expansion` en herramientas de build y test
+  antiguas. No se fuerza la versión 5 porque rompe la API esperada por
+  `minimatch` 3; se mantiene como riesgo de desarrollo visible hasta actualizar
+  sus paquetes padre, mientras CI bloquea vulnerabilidades runtime altas.
+- El resumen usa el total global autorizado, pero los subtotales se calculan
+  sobre la página visible y se etiquetan de esa forma.
+
+### Rollback
+
+Retirar `apps/web`, sus cuatro scripts raíz y los gates web de CI. No existen
+migraciones ni cambios de datos asociados.

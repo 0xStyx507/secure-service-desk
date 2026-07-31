@@ -93,6 +93,39 @@ si luego se elimina. Después del primer arranque, retire las tres variables.
 
 Swagger: `http://localhost:3000/docs`.
 
+## Demo visual
+
+La interfaz de portafolio vive en `apps/web` y consume los contratos reales de
+la API. Es una SPA React/TypeScript deliberadamente pequeña, sin kit visual
+externo: incluye autenticación, registro `USER`, restauración de sesión,
+dashboard, notificaciones, filtros, paginación, creación y detalle de tickets.
+
+Con MongoDB y Redis activos, ejecute API, worker y frontend en terminales
+separadas:
+
+```powershell
+pnpm start:dev
+pnpm start:worker:dev
+pnpm web:dev
+```
+
+Abra `http://localhost:3001`. Vite mantiene las llamadas bajo `/api` y las
+redirige a `http://localhost:3000`, evitando relajar cookies o CORS durante el
+desarrollo. El access token permanece solo en memoria; únicamente el token CSRF
+se conserva en `sessionStorage` para poder rotar la cookie HttpOnly después de
+recargar la pestaña.
+
+Para validar el frontend de forma independiente:
+
+```powershell
+pnpm web:lint
+pnpm web:test
+pnpm web:build
+```
+
+Consulte [Demo UI](docs/DEMO-UI.md) para el alcance, decisiones UX y controles
+de un despliegue público.
+
 ## Validación
 
 ```powershell
@@ -129,6 +162,7 @@ el gate con Docker Desktop y un único comando: `pnpm test:integration`.
 - [Autenticación y sesiones](docs/AUTHENTICATION.md)
 - [Decisiones técnicas](docs/DECISIONS.md)
 - [Bitácora de implementación](docs/IMPLEMENTATION-LOG.md)
+- [Demo UI](docs/DEMO-UI.md)
 - [Bitácora de Notion](https://app.notion.com/p/3ad1bb7d550581aa871bde5dc746a05a)
 
 ## Persistencia

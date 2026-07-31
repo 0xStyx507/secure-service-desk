@@ -24,10 +24,14 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm audit:prod
       - run: pnpm lint
+      - run: pnpm web:lint
       - run: pnpm test
+      - run: pnpm web:test
       - run: pnpm test:e2e
       - run: pnpm build
+      - run: pnpm web:build
 
   integration:
     name: Real infrastructure integration
@@ -47,6 +51,32 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm test:integration
+
+  dependency-scan:
+    name: Trivy workspace scan
+    needs: quality
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          format: sarif
+          output: trivy-workspace-results.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: 1
+      - uses: github/codeql-action/upload-sarif@47be0dbd5113ab1b79fe2dd3f68bdf7e426cdc87 # v3
+        if: always()
+        with:
+          sarif_file: trivy-workspace-results.sarif
 
   trivy:
     name: Trivy image scan
