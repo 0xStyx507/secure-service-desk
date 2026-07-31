@@ -1,0 +1,92 @@
+[
+  {
+    "marca": "BMW",
+    "modelo": "M3 GTR (E46)",
+    "puertas": 2,
+    "motor": "4.0L V8",
+    "pasajeros": 2,
+    "llantas": "18 pulgadas",
+    "transmision": "Manual"
+  },
+  {
+    "marca": "Porsche",
+    "modelo": "Carrera GT",
+    "puertas": 2,
+    "motor": "5.7L V10",
+    "pasajeros": 2,
+    "llantas": "19 pulgadas",
+    "transmision": "Manual"
+  },
+  {
+    "marca": "Lamborghini",
+    "modelo": "Gallardo",
+    "puertas": 2,
+    "motor": "5.0L V10",
+    "pasajeros": 2,
+    "llantas": "19 pulgadas",
+    "transmision": "Automática"
+  },
+  {
+    "marca": "Lamborghini",
+    "modelo": "Murciélago",
+    "puertas": 2,
+    "motor": "6.2L V12",
+    "pasajeros": 2,
+    "llantas": "19 pulgadas",
+    "transmision": "Manual"
+  },
+  {
+    "marca": "Ford",
+    "modelo": "Mustang GT (2005)",
+    "puertas": 2,
+    "motor": "4.6L V8",
+    "pasajeros": 4,
+    "llantas": "17 pulgadas",
+    "transmision": "Manual"
+  },
+  {
+    "marca": "Chevrolet",
+    "modelo": "Corvette C6",
+    "puertas": 2,
+    "motor": "6.0L V8",
+    "pasajeros": 2,
+    "llantas": "18 pulgadas",
+    "transmision": "Manual"
+  },
+  {
+    "marca": "Dodge",
+    "modelo": "Viper SRT-10",
+    "puertas": 2,
+    "motor": "8.3L V10",
+    "pasajeros": 2,
+    "llantas": "19 pulgadas",
+    "transmision": "Manual"
+  },
+  {
+    "marca": "Mazda",
+    "modelo": "RX-8",
+    "puertas": 4,
+    "motor": "1.3L Wankel rotativo",
+    "pasajeros": 4,
+    "llantas": "18 pulgadas",
+    "transmision": "Manual"
+  },
+  {
+    "marca": "Mitsubishi",
+    "modelo": "Lancer Evolution VIII",
+    "puertas": 4,
+    "motor": "2.0L I4 Turbo",
+    "pasajeros": 5,
+    "llantas": "17 pulgadas",
+    "transmision": "Manual"
+  },
+  {
+    "marca": "Subaru",
+    "modelo": "Impreza WRX STi",
+    "puertas": 4,
+    "motor": "2.5L Bóxer Turbo",
+    "pasajeros": 5,
+    "llantas": "17 pulgadas",
+    "transmision": "Manual"
+  }
+]

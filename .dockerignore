@@ -1,0 +1,12 @@
+node_modules
+.pnpm-store
+dist
+coverage
+.git
+.env
+.env.*
+!.env.example
+legacy
+*.log
+.agents
+AGENTS.md

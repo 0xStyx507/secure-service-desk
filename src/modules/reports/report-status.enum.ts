@@ -1,0 +1,6 @@
+export enum ReportStatus {
+  QUEUED = 'QUEUED',
+  PROCESSING = 'PROCESSING',
+  COMPLETED = 'COMPLETED',
+  DEAD_LETTER = 'DEAD_LETTER',
+}
