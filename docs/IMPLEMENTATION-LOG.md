@@ -294,3 +294,41 @@ El selector depende del nombre estable del paquete raíz. Si este cambia, Docker
 fallará de forma visible en la instalación en vez de incluir paquetes no
 deseados. El rollback es retirar el filtro y conservar la copia del workspace,
 asumiendo entonces una instalación más amplia.
+
+## 2026-07-31 — Gate SARIF alineado con severidades
+
+### Motivo
+
+El escaneo de imagen generaba SARIF con todas las severidades. Trivy Action
+elimina internamente el filtro `severity` para ese formato salvo que se active
+`limit-severities-for-sarif`, por lo que `exit-code: 1` bloqueaba también
+hallazgos inferiores a `HIGH`. El escáner de secretos se activaba por defecto y
+recorría el caché de Corepack, que no forma parte del runtime de la aplicación.
+
+### Decisión y cambio
+
+- Activar `limit-severities-for-sarif: true` en workspace e imagen.
+- Declarar `scanners: vuln` en el gate de vulnerabilidades de imagen.
+- Mantener un gate de secretos de imagen separado, visible y fail-closed.
+- Eliminar pnpm, sus shims, caché de Corepack y store después de instalar
+  producción.
+- Conservar `severity: HIGH,CRITICAL`, `ignore-unfixed: false` y `exit-code: 1`.
+
+### Validación
+
+- El run `30653075144` confirmó quality, integración, build, workspace scan y
+  upload SARIF correctos; solo el gate de imagen falló.
+- El entrypoint fijado de Trivy Action fue revisado para confirmar la semántica
+  de `limit-severities-for-sarif`.
+- La imagen completa construyó correctamente con 120 MB; NestJS quedó disponible
+  y se verificó la ausencia de pnpm utilizable, sus cachés, TypeScript y la Demo
+  UI. Corepack permanece como paquete incluido por Node, pero sus shims están
+  deshabilitados.
+
+### Riesgo y rollback
+
+El SARIF deja de publicar severidades inferiores a `HIGH`, coherente con el gate
+de vulnerabilidades. Los secretos se evalúan en un paso independiente contra la
+imagen construida; si el build falla, este paso se omite para no añadir un error
+secundario por imagen inexistente. El rollback es retirar el límite y volver a
+un único escaneo mixto, aceptando menor observabilidad.
