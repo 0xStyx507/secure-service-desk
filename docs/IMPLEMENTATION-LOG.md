@@ -332,3 +332,41 @@ de vulnerabilidades. Los secretos se evalúan en un paso independiente contra la
 imagen construida; si el build falla, este paso se omite para no añadir un error
 secundario por imagen inexistente. El rollback es retirar el límite y volver a
 un único escaneo mixto, aceptando menor observabilidad.
+
+## 2026-07-31 — Enforcement Trivy visible y runtime mínimo
+
+### Motivo
+
+Tras alinear el SARIF con `HIGH,CRITICAL`, el gate confirmó un hallazgo de esas
+severidades, pero el formato SARIF no mostró paquete, identificador ni versión en
+la consola. La inspección del gate de secretos también detectó metadatos de pnpm
+en `/root/.cache/pnpm`, innecesarios después de construir la imagen.
+
+### Decisión y cambio
+
+- Ejecutar primero un scan de vulnerabilidades en formato `table` con
+  `exit-code: 1` para enforcement visible.
+- Generar SARIF en un paso independiente con `exit-code: 0`, conservando el
+  upload a Code Scanning aunque el enforcement encuentre vulnerabilidades.
+- Mantener el gate de secretos independiente y fail-closed.
+- Retirar caché de pnpm, lockfile y configuración del workspace del runtime; el
+  gate de workspace continúa siendo la fuente de cobertura de dependencias.
+
+### Validación
+
+- El run `30654633031` confirmó que build, upload SARIF y secret scan pasan; el
+  único fallo fue el scan de vulnerabilidades de imagen.
+- La imagen completa construyó correctamente con el lockfile congelado y quedó
+  en 79 MB. La inspección runtime devolvió `runtime-metadata-clean: ok`: NestJS
+  permanece resoluble y no están los cachés de Corepack/pnpm, los manifests del
+  workspace, TypeScript ni la Demo UI.
+- El próximo run es la evidencia definitiva del detalle del hallazgo o del gate
+  completamente verde.
+
+### Riesgo y rollback
+
+El escaneo de imagen deja de inferir dependencias desde el lockfile completo del
+workspace, que incluía paquetes no instalados en runtime. Esa cobertura no se
+elimina: permanece en `Trivy workspace scan` y `pnpm audit:prod`. El escaneo de
+imagen conserva OS, paquetes presentes y secretos. El rollback es conservar los
+manifests en runtime y aceptar posibles hallazgos ajenos al artefacto instalado.

@@ -19,7 +19,8 @@ RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm --filter secure-service-desk-api install --prod --frozen-lockfile --ignore-scripts \
   && corepack disable \
-  && rm -rf /root/.cache/node/corepack /root/.local/share/pnpm
+  && rm -rf /root/.cache/node/corepack /root/.cache/pnpm /root/.local/share/pnpm \
+  && rm -f /app/pnpm-lock.yaml /app/pnpm-workspace.yaml
 
 COPY --from=build /app/dist ./dist
 
