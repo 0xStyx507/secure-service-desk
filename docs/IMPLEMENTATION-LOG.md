@@ -148,3 +148,28 @@ inmutable y la inicialización real del replica set.
 Retirar el job `integration` de CI, el script/configuración Testcontainers y las
 factories de lifecycle. El rollback no necesita eliminar bases ni volúmenes
 porque cada contenedor de prueba es desechable.
+
+## 2026-07-31 — Corrección del setup de Trivy en CI
+
+### Motivo
+
+El primer run publicado no pudo resolver la dependencia transitiva
+`aquasecurity/setup-trivy@v0.2.1`, utilizada por `trivy-action` v0.28.0.
+
+### Decisión y cambio
+
+Actualizar `aquasecurity/trivy-action` a v0.36.0 mediante su SHA inmutable. Esta
+versión referencia `setup-trivy` v0.2.6 también por SHA, conservando la política
+de supply chain sin depender de tags flotantes.
+
+### Validación
+
+- Metadata oficial de `action.yaml` revisada para v0.28.0 y v0.36.0.
+- Workflow validado por formato y `git diff --check` antes de publicarlo.
+- La confirmación definitiva corresponde al nuevo run de `Secure CI`.
+
+### Riesgo y rollback
+
+La actualización también cambia la versión predeterminada del CLI Trivy. Si
+aparece una incompatibilidad distinta, el rollback es restaurar el SHA anterior
+solo después de fijar explícitamente una versión válida de `setup-trivy`.
