@@ -393,8 +393,15 @@ en CI.
 ### Validación
 
 `pnpm build`, `pnpm openapi:export` y la comprobación de diff deben pasar antes
-de publicar cambios de controladores o DTO. El endpoint interactivo `/docs` y el
-archivo versionado deben provenir de la misma función `createOpenApiDocument`.
+de publicar cambios de controladores o DTO. El exportador usa un módulo NestJS
+aislado con los mismos controladores y decorators, por lo que no requiere
+MongoDB, Redis ni BullMQ durante el gate de calidad. El endpoint interactivo
+`/docs` y el archivo versionado provienen de la misma función
+`createOpenApiDocument`.
+
+El primer run `30835171239` demostró que arrancar `AppModule` en el exportador
+abría conexiones externas y agotaba el timeout del job. Ese enfoque se retiró;
+el exportador aislado se valida localmente con build y generación determinista.
 
 ### Riesgo y rollback
 
