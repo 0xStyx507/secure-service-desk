@@ -8,3 +8,10 @@ coverage/
 .agents/
 *.log
 .DS_Store
+
+# Artefactos locales de documentación; las fuentes Markdown de docs sí se versionan.
+docs/.generated/
+docs/_artifacts/
+docs/*.generated.*
+docs/*.bak
+docs/*.tmp

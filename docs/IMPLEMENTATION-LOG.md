@@ -370,3 +370,42 @@ workspace, que incluía paquetes no instalados en runtime. Esa cobertura no se
 elimina: permanece en `Trivy workspace scan` y `pnpm audit:prod`. El escaneo de
 imagen conserva OS, paquetes presentes y secretos. El rollback es conservar los
 manifests en runtime y aceptar posibles hallazgos ajenos al artefacto instalado.
+
+## 2026-07-31 — Retiro de npm del runtime
+
+### Motivo
+
+El run `30655660928` validó el enforcement visible y reportó seis
+vulnerabilidades dentro del `npm` incluido por `node:22-alpine`: cinco `HIGH` y
+una `CRITICAL` en dependencias internas `brace-expansion`, `picomatch`,
+`sigstore` y `tar`. No pertenecen al grafo productivo instalado por la API.
+
+### Decisión y cambio
+
+- Retirar del stage runtime los paquetes globales de npm y Corepack, junto con
+  sus ejecutables, después de completar la instalación productiva.
+- Conservar únicamente `node`, `dist`, `package.json` y las dependencias de
+  producción necesarias para ejecutar `node dist/main.js`.
+- No ignorar CVE ni reducir severidades: el mismo gate debe demostrar que la
+  remediación eliminó los componentes vulnerables.
+
+Se descartó actualizar dependencias internas de npm de forma manual: alterar su
+árbol vendorizado crea un runtime difícil de mantener y npm no es necesario para
+arrancar ni operar el servicio.
+
+### Validación
+
+- Quality gates, Trivy workspace e integración real pasaron en el run
+  `30655660928`.
+- El scan de imagen identificó `CVE-2026-13149`, `CVE-2026-14257`,
+  `CVE-2026-33671`, `CVE-2026-48815`, `CVE-2026-59873` y `CVE-2026-59874`.
+- El build, la resolución de NestJS, la ausencia de npm/Corepack y el nuevo gate
+  de imagen se validan antes de cerrar el cambio.
+
+### Riesgo y rollback
+
+No se podrán ejecutar `npm`, `npx` ni gestores de paquetes dentro del contenedor
+en producción; es una restricción intencional para un artefacto inmutable. Node
+y las dependencias instaladas permanecen disponibles. El rollback es restaurar
+los paquetes globales de la imagen base y aceptar nuevamente su superficie de
+ataque y sus hallazgos.

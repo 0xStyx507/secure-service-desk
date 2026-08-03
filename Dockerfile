@@ -20,7 +20,9 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm --filter secure-service-desk-api install --prod --frozen-lockfile --ignore-scripts \
   && corepack disable \
   && rm -rf /root/.cache/node/corepack /root/.cache/pnpm /root/.local/share/pnpm \
-  && rm -f /app/pnpm-lock.yaml /app/pnpm-workspace.yaml
+    /usr/local/lib/node_modules/corepack /usr/local/lib/node_modules/npm \
+  && rm -f /app/pnpm-lock.yaml /app/pnpm-workspace.yaml \
+    /usr/local/bin/corepack /usr/local/bin/npm /usr/local/bin/npx
 
 COPY --from=build /app/dist ./dist
 

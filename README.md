@@ -5,6 +5,43 @@ estricto, NestJS, MongoDB, Redis y BullMQ. El repositorio comenzó como un CRUD
 de autos en Express; ese baseline se conserva en `legacy/`, pero no forma parte
 del runtime actual.
 
+El objetivo del proyecto es demostrar cómo diseñar, implementar y operar una API
+de soporte con controles de seguridad verificables: identidad propia, RBAC,
+persistencia durable, procesamiento asíncrono, auditoría, pruebas de integración
+y una interfaz visual pequeña para recorrer los flujos principales.
+
+## Estado y recorrido rápido
+
+La rama `main` contiene la implementación V2 activa. Para probar el proyecto
+localmente:
+
+1. Levante MongoDB y Redis con Docker Compose.
+2. Configure las variables de entorno y genere las claves RSA de desarrollo.
+3. Inicie API, worker y Demo UI en terminales separadas.
+4. Cree un usuario `USER` desde la UI o use Swagger para recorrer endpoints
+   administrativos con una cuenta bootstrap controlada.
+
+```powershell
+docker compose up -d
+Copy-Item .env.example .env
+pnpm install
+pnpm start:dev
+pnpm start:worker:dev
+pnpm web:dev
+```
+
+URLs locales:
+
+- Demo UI: `http://localhost:3001`
+- API: `http://localhost:3000`
+- Swagger/OpenAPI: `http://localhost:3000/docs`
+- Liveness: `http://localhost:3000/api/health/live`
+- Readiness: `http://localhost:3000/api/health/ready`
+
+La UI usa los contratos reales de la API y no datos mock. El access token vive
+solo en memoria; el refresh token permanece en una cookie HttpOnly y el cliente
+conserva únicamente el token CSRF en `sessionStorage`.
+
 El producto funcional no consume Keycloak, RapidAPI ni otra API SaaS. Usuarios,
 sesiones, tickets, archivos, auditoría, notificaciones y reportes se gestionan
 con código propio.
@@ -46,12 +83,9 @@ equivalente a “libre de malware”.
 Requisitos: Node.js 22, pnpm 11, MongoDB, Redis y Docker para las pruebas de
 integración.
 
-```powershell
-docker compose up -d
-Copy-Item .env.example .env
-pnpm install
-pnpm start:dev
-```
+La secuencia completa de inicio está en [Estado y recorrido rápido](#estado-y-recorrido-rápido).
+La primera ejecución requiere completar las claves RSA y los valores de MongoDB,
+Redis y cookies descritos en [Autenticación y sesiones](docs/AUTHENTICATION.md).
 
 En otra terminal, inicie los workers:
 
@@ -136,6 +170,14 @@ pnpm test:integration
 pnpm build
 ```
 
+Validación del frontend:
+
+```powershell
+pnpm web:lint
+pnpm web:test
+pnpm web:build
+```
+
 Las pruebas HTTP actuales ejercitan validación, hardening, cookies/CSRF,
 autenticación y autorización de tickets. También compilan los grafos completos
 de la API y del worker con dobles únicamente en los bordes externos.
@@ -151,9 +193,20 @@ El mismo comando construye `dist/`, ejecuta `dist/main.js` y `dist/worker.js`,
 comprueba readiness y verifica que ambos procesos atiendan `SIGTERM` sin quedar
 colgados.
 
-GitHub Actions ejecuta esta misma suite en un runner Linux con Docker antes de
-construir y escanear la imagen. Así, quien evalúe el portafolio puede reproducir
-el gate con Docker Desktop y un único comando: `pnpm test:integration`.
+GitHub Actions ejecuta esta misma suite en un runner Linux con Docker. Después
+construye la imagen runtime y aplica tres controles Trivy: dependencias del
+workspace, vulnerabilidades de la imagen y secretos. Un hallazgo `HIGH` o
+`CRITICAL` bloquea el workflow; el SARIF se publica de forma independiente para
+conservar el detalle en GitHub Code Scanning.
+
+Para reproducir localmente el gate principal con Docker Desktop:
+
+```powershell
+pnpm test:integration
+```
+
+El escaneo de imagen es responsabilidad del workflow porque Trivy y su base de
+datos se ejecutan allí con el mismo artefacto que se evalúa en CI.
 
 ## Documentación
 
@@ -163,7 +216,10 @@ el gate con Docker Desktop y un único comando: `pnpm test:integration`.
 - [Decisiones técnicas](docs/DECISIONS.md)
 - [Bitácora de implementación](docs/IMPLEMENTATION-LOG.md)
 - [Demo UI](docs/DEMO-UI.md)
-- [Bitácora de Notion](https://app.notion.com/p/3ad1bb7d550581aa871bde5dc746a05a)
+
+La documentación versionada es la fuente de decisiones, arquitectura, alcance,
+riesgos y evidencia. Los cambios sensibles deben registrarse en la bitácora con
+su motivo, alternativas, validación y rollback.
 
 ## Persistencia
 
