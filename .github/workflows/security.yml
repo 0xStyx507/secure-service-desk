@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -31,6 +32,8 @@ jobs:
       - run: pnpm web:test
       - run: pnpm test:e2e
       - run: pnpm build
+      - run: pnpm openapi:export
+      - run: git diff --exit-code -- docs/openapi.json
       - run: pnpm web:build
 
   integration:

@@ -13,6 +13,7 @@
     "start:worker:dev": "nest start --entryFile worker --watch",
     "start:prod": "node dist/main.js",
     "start:worker": "node dist/worker.js",
+    "openapi:export": "node dist/openapi-export.js",
     "web:dev": "pnpm --dir apps/web dev",
     "web:build": "pnpm --dir apps/web build",
     "web:lint": "pnpm --dir apps/web lint",

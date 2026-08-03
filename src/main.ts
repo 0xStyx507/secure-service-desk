@@ -3,7 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import type { INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
@@ -11,6 +11,7 @@ import { GlobalHttpExceptionFilter } from './common/filters/global-http-exceptio
 import { StructuredLogger } from './common/logging/structured.logger';
 import type { RequestWithId } from './common/request-id.types';
 import { RequestContextService } from './infrastructure/context/request-context.service';
+import { createOpenApiDocument } from './openapi';
 
 export async function createApp() {
   const app = await NestFactory.create(AppModule, {
@@ -75,20 +76,7 @@ export function configureHttpApp(
   });
   app.useGlobalFilters(new GlobalHttpExceptionFilter());
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Secure Service Desk API')
-    .setDescription('Portfolio API foundation: modular NestJS, TypeScript and MongoDB.')
-    .setVersion('0.1.0')
-    .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' })
-    .addTag('system', 'System endpoints')
-    .addTag('auth', 'Code-managed authentication and sessions')
-    .addTag('tickets', 'Service desk tickets and comments')
-    .addTag('notifications', 'Persistent in-app notifications')
-    .addTag('attachments', 'Authorized ticket images stored in MongoDB GridFS')
-    .addTag('reports', 'Asynchronous PDF reports')
-    .addTag('governance', 'Administrator roles and audit trail')
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  const document = createOpenApiDocument(app);
   SwaggerModule.setup('docs', app, document);
 }
 

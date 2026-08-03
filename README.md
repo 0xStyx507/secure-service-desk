@@ -127,6 +127,18 @@ si luego se elimina. Después del primer arranque, retire las tres variables.
 
 Swagger: `http://localhost:3000/docs`.
 
+El contrato versionado está en [docs/openapi.json](docs/openapi.json). Se genera
+desde los mismos metadatos NestJS que alimentan Swagger UI:
+
+```powershell
+pnpm build
+pnpm openapi:export
+```
+
+CI verifica que el contrato generado no difiera del archivo versionado. Esto
+evita que una ruta o DTO documentado en código quede fuera de la especificación
+que puede consumir Postman, Insomnia, Redoc u otros generadores de clientes.
+
 ## Demo visual
 
 La interfaz de portafolio vive en `apps/web` y consume los contratos reales de
@@ -212,6 +224,7 @@ datos se ejecutan allí con el mismo artefacto que se evalúa en CI.
 
 - [Arquitectura objetivo V2](docs/RESTRUCTURING-V2.md)
 - [Arquitectura técnica](docs/ARCHITECTURE.md)
+- [Contrato OpenAPI](docs/openapi.json)
 - [Autenticación y sesiones](docs/AUTHENTICATION.md)
 - [Decisiones técnicas](docs/DECISIONS.md)
 - [Bitácora de implementación](docs/IMPLEMENTATION-LOG.md)

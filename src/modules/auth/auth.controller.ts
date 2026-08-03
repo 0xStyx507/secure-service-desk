@@ -12,7 +12,14 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiCookieAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiSecurity,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import type { AuthenticatedRequest, IssuedSession } from './auth.types';
@@ -55,6 +62,8 @@ export class AuthController {
   @Post('refresh')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @HttpCode(200)
+  @ApiCookieAuth('refreshCookie')
+  @ApiSecurity('csrfToken')
   @ApiOperation({ summary: 'Rotate the refresh session and issue an access token' })
   async refresh(
     @Req() request: Request,
@@ -74,6 +83,8 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(204)
+  @ApiCookieAuth('refreshCookie')
+  @ApiSecurity('csrfToken')
   @ApiOperation({ summary: 'Revoke the current refresh session' })
   async logout(
     @Req() request: Request,

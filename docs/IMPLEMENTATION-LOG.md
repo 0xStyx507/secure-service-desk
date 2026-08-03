@@ -371,6 +371,38 @@ elimina: permanece en `Trivy workspace scan` y `pnpm audit:prod`. El escaneo de
 imagen conserva OS, paquetes presentes y secretos. El rollback es conservar los
 manifests en runtime y aceptar posibles hallazgos ajenos al artefacto instalado.
 
+## 2026-08-03 — Contrato OpenAPI versionado
+
+### Motivo
+
+Swagger UI ya estaba disponible en `/docs`, pero el contrato solo existía como
+un documento generado en memoria al arrancar la API. Para un proyecto de
+portafolio se necesita una especificación revisable, descargable y verificable
+en CI.
+
+### Decisión y cambio
+
+- Mantener NestJS Swagger como fuente de metadata para no duplicar rutas, DTO y
+  esquemas manualmente en YAML.
+- Extraer la configuración a `src/openapi.ts`, compartida por Swagger UI y el
+  exportador estático.
+- Versionar `docs/openapi.json` y comprobar con `git diff --exit-code` que no esté
+  desactualizado después de generar el documento.
+- Declarar en el contrato el bearer JWT, la cookie de refresh y el header CSRF.
+
+### Validación
+
+`pnpm build`, `pnpm openapi:export` y la comprobación de diff deben pasar antes
+de publicar cambios de controladores o DTO. El endpoint interactivo `/docs` y el
+archivo versionado deben provenir de la misma función `createOpenApiDocument`.
+
+### Riesgo y rollback
+
+El contrato puede cambiar cuando cambien decorators o DTO. El gate de diff hace
+visible esa modificación y obliga a versionarla junto al código. El rollback es
+restaurar el archivo generado y retirar el paso de exportación, manteniendo
+Swagger UI en runtime.
+
 ## 2026-07-31 — Retiro de npm del runtime
 
 ### Motivo
