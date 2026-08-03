@@ -448,3 +448,17 @@ en producción; es una restricción intencional para un artefacto inmutable. Nod
 y las dependencias instaladas permanecen disponibles. El rollback es restaurar
 los paquetes globales de la imagen base y aceptar nuevamente su superficie de
 ataque y sus hallazgos.
+
+## 2026-08-03 — CI verde con contrato OpenAPI y runtime mínimo
+
+El run `30835848475` sobre el commit `3e19b41` confirmó el estado integrado:
+
+- Quality gates pasó incluyendo `pnpm openapi:export` y el diff del contrato.
+- La integración real de MongoDB, Redis, GridFS y BullMQ pasó.
+- Trivy workspace pasó y publicó SARIF.
+- La imagen Docker construyó y el escaneo Trivy de vulnerabilidades pasó después
+  de retirar npm/Corepack del runtime.
+- El SARIF de imagen, el secret scan y la limpieza del job pasaron.
+
+Este run es la evidencia de referencia para el hardening de la imagen y el
+contrato OpenAPI versionado.
