@@ -3,6 +3,7 @@ packages:
 
 overrides:
   '@nestjs/swagger>js-yaml': 5.2.2
+  fast-uri: 3.1.5
 
 allowBuilds:
   '@scarf/scarf': false

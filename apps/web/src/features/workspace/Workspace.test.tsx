@@ -6,6 +6,7 @@ import { Workspace } from './Workspace';
 const apiMock = vi.hoisted(() => ({
   listTickets: vi.fn(),
   listNotifications: vi.fn(),
+  markNotificationRead: vi.fn(),
   createTicket: vi.fn(),
   getTicket: vi.fn(),
 }));
@@ -130,6 +131,33 @@ describe('Workspace', () => {
 
     await waitFor(() =>
       expect(screen.getByText('No hay novedades pendientes.')).toBeInTheDocument(),
+    );
+  });
+
+  it('opens the notification bell and marks an unread item as read', async () => {
+    const notification = {
+      _id: '507f1f77bcf86cd799439099',
+      title: 'Ticket actualizado',
+      message: 'El ticket SD-000099 cambio de estado.',
+      type: 'TICKET_UPDATED',
+      createdAt: '2026-07-31T12:00:00.000Z',
+    };
+    apiMock.listNotifications.mockResolvedValue({
+      items: [notification],
+      pagination: { page: 1, limit: 6, total: 1, pages: 1 },
+    });
+    apiMock.markNotificationRead.mockResolvedValue({
+      ...notification,
+      readAt: '2026-07-31T12:01:00.000Z',
+    });
+
+    render(<Workspace user={user} onLogout={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Notificaciones' }));
+    expect((await screen.findAllByText('Ticket actualizado')).length).toBeGreaterThanOrEqual(1);
+    fireEvent.click(screen.getByRole('button', { name: /Ticket actualizado/ }));
+
+    await waitFor(() =>
+      expect(apiMock.markNotificationRead).toHaveBeenCalledWith(notification._id),
     );
   });
 });

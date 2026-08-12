@@ -15,6 +15,10 @@ import {
   AdminBootstrapState,
   AdminBootstrapStateSchema,
 } from './schemas/admin-bootstrap-state.schema';
+import { MfaChallenge, MfaChallengeSchema } from './schemas/mfa-challenge.schema';
+import { MfaCryptoService } from './mfa-crypto.service';
+import { MfaService } from './mfa.service';
+import { MfaController } from './mfa.controller';
 
 @Module({
   imports: [
@@ -23,9 +27,10 @@ import {
     MongooseModule.forFeature([
       { name: RefreshSession.name, schema: RefreshSessionSchema },
       { name: AdminBootstrapState.name, schema: AdminBootstrapStateSchema },
+      { name: MfaChallenge.name, schema: MfaChallengeSchema },
     ]),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, MfaController],
   providers: [
     AuthService,
     PasswordHasherService,
@@ -34,6 +39,8 @@ import {
     JwtAuthGuard,
     RolesGuard,
     AdminBootstrapService,
+    MfaCryptoService,
+    MfaService,
   ],
   exports: [UsersModule, JwtAuthGuard, RolesGuard, JwtTokenService],
 })

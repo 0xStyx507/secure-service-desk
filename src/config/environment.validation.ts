@@ -68,6 +68,7 @@ export function validateEnvironment(environment: Environment): Environment {
   const jwtKeyId = String(environment.JWT_KEY_ID ?? '').trim();
   const jwtPrivateKey = String(environment.JWT_PRIVATE_KEY_BASE64 ?? '').trim();
   const jwtPublicKey = String(environment.JWT_PUBLIC_KEY_BASE64 ?? '').trim();
+  const mfaEncryptionKeyBase64 = String(environment.MFA_ENCRYPTION_KEY_BASE64 ?? '').trim();
 
   if (!mongodbUri.startsWith('mongodb')) {
     throw new Error('MONGODB_URI must be a MongoDB connection string');
@@ -93,6 +94,12 @@ export function validateEnvironment(environment: Environment): Environment {
   }
   if (nodeEnv === 'production' && !redisUrl.startsWith('rediss://')) {
     throw new Error('REDIS_URL must use rediss:// in production');
+  }
+  if (mfaEncryptionKeyBase64 && Buffer.from(mfaEncryptionKeyBase64, 'base64').length !== 32) {
+    throw new Error('MFA_ENCRYPTION_KEY_BASE64 must encode exactly 32 bytes');
+  }
+  if (nodeEnv === 'production' && !mfaEncryptionKeyBase64) {
+    throw new Error('MFA_ENCRYPTION_KEY_BASE64 is required in production');
   }
   if (Boolean(bootstrapAdminEmail) !== Boolean(bootstrapAdminPassword)) {
     throw new Error(
@@ -135,5 +142,6 @@ export function validateEnvironment(environment: Environment): Environment {
     allowAdminBootstrap,
     refreshCookieName,
     csrfCookieName,
+    mfaEncryptionKeyBase64,
   };
 }

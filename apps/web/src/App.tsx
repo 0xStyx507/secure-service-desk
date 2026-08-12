@@ -3,7 +3,7 @@ import { ShieldIcon } from './components/Icons';
 import { AuthScreen } from './features/auth/AuthScreen';
 import { Workspace } from './features/workspace/Workspace';
 import { api } from './lib/api';
-import type { CurrentUser } from './types';
+import type { CurrentUser, MfaChallenge } from './types';
 
 export default function App() {
   const [user, setUser] = useState<CurrentUser>();
@@ -28,8 +28,15 @@ export default function App() {
     }
   }
 
-  async function login(email: string, password: string) {
-    setUser(await api.login(email, password));
+  async function login(email: string, password: string): Promise<MfaChallenge | undefined> {
+    const result = await api.login(email, password);
+    if ('mfaRequired' in result) return result;
+    setUser(result);
+    return undefined;
+  }
+
+  async function completeMfaLogin(challengeToken: string, code: string) {
+    setUser(await api.completeMfaLogin(challengeToken, code));
   }
 
   async function register(email: string, password: string) {
@@ -80,7 +87,8 @@ export default function App() {
     );
   }
 
-  if (!user) return <AuthScreen onLogin={login} onRegister={register} />;
+  if (!user)
+    return <AuthScreen onLogin={login} onCompleteMfa={completeMfaLogin} onRegister={register} />;
 
   return <Workspace user={user} onLogout={logout} />;
 }

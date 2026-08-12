@@ -55,6 +55,41 @@ jobs:
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm test:integration
 
+  sonar:
+    name: SonarCloud analysis
+    needs: quality
+    if: ${{ vars.SONAR_ENABLED == 'true' && vars.SONAR_ORGANIZATION != '' && vars.SONAR_PROJECT_KEY != '' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 11.8.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Verify Sonar credentials
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -z "$SONAR_TOKEN" ]; then
+            echo "SONAR_TOKEN is required when SONAR_ENABLED=true"
+            exit 1
+          fi
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm test:cov
+      - uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
+
   dependency-scan:
     name: Trivy workspace scan
     needs: quality
@@ -86,6 +121,16 @@ jobs:
     name: Trivy image scan
     needs: [quality, integration]
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            dockerfile: Dockerfile
+            image: secure-service-desk-api:ci
+          - name: web
+            dockerfile: apps/web/Dockerfile
+            image: secure-service-desk-web:ci
     permissions:
       contents: read
       security-events: write
@@ -97,11 +142,12 @@ jobs:
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
+          file: ${{ matrix.dockerfile }}
           load: true
-          tags: secure-service-desk-api:ci
+          tags: ${{ matrix.image }}
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: secure-service-desk-api:ci
+          image-ref: ${{ matrix.image }}
           scanners: vuln
           format: table
           severity: HIGH,CRITICAL
@@ -110,22 +156,22 @@ jobs:
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         if: ${{ always() && steps.build_image.outcome == 'success' }}
         with:
-          image-ref: secure-service-desk-api:ci
+          image-ref: ${{ matrix.image }}
           scanners: vuln
           format: sarif
-          output: trivy-results.sarif
+          output: trivy-${{ matrix.name }}-results.sarif
           limit-severities-for-sarif: true
           severity: HIGH,CRITICAL
           ignore-unfixed: false
           exit-code: 0
       - uses: github/codeql-action/upload-sarif@f205ea1c3313d32999d8d6a48b4f6530d4437b38 # v4.37.4
-        if: ${{ always() && hashFiles('trivy-results.sarif') != '' }}
+        if: ${{ always() && hashFiles(format('trivy-{0}-results.sarif', matrix.name)) != '' }}
         with:
-          sarif_file: trivy-results.sarif
+          sarif_file: trivy-${{ matrix.name }}-results.sarif
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         if: ${{ always() && steps.build_image.outcome == 'success' }}
         with:
-          image-ref: secure-service-desk-api:ci
+          image-ref: ${{ matrix.image }}
           scanners: secret
           format: table
           exit-code: 1

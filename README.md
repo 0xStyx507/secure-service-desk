@@ -15,30 +15,23 @@ y una interfaz visual pequeña para recorrer los flujos principales.
 La rama `main` contiene la implementación V2 activa. Para probar el proyecto
 localmente:
 
-1. Levante MongoDB y Redis con Docker Compose.
-2. Configure las variables de entorno y genere las claves RSA de desarrollo.
-3. Inicie API, worker y Demo UI en terminales separadas.
-4. Cree un usuario `USER` desde la UI o use Swagger para recorrer endpoints
+1. Configure las variables de entorno y genere las claves RSA de desarrollo.
+2. Levante el stack completo con Docker Compose.
+3. Cree un usuario `USER` desde la UI o use Swagger para recorrer endpoints
    administrativos con una cuenta bootstrap controlada.
 
 ```powershell
-docker compose up -d
-Copy-Item .env.example .env
-pnpm install
-pnpm start:dev
-pnpm start:worker:dev
-pnpm web:dev
+docker compose --env-file .env up --build -d
 ```
 
 URLs locales:
 
 - Demo UI: `http://localhost:3001`
-- API: `http://localhost:3000`
-- Swagger/OpenAPI: `http://localhost:3000/docs`
-- Liveness: `http://localhost:3000/api/health/live`
-- Readiness: `http://localhost:3000/api/health/ready`
+- Swagger/OpenAPI through the reverse proxy: `http://localhost:3001/api/docs`
+- Liveness through the reverse proxy: `http://localhost:3001/api/health/live`
+- Readiness through the reverse proxy: `http://localhost:3001/api/health/ready`
 
-La UI usa los contratos reales de la API y no datos mock. El access token vive
+La UI usa los contratos reales de la API y no datos mock. El navegador solo conoce `/api`; Nginx es la entrada publica y el API no publica el puerto 3000 al host. El access token vive
 solo en memoria; el refresh token permanece en una cookie HttpOnly y el cliente
 conserva únicamente el token CSRF en `sessionStorage`.
 
@@ -70,6 +63,11 @@ con código propio.
 
 ## Alcance de seguridad
 
+La autenticación incluye MFA TOTP opcional con secretos cifrados y desafíos de
+login de un solo uso. El endpoint MCP está disponible en `/api/mcp`: las
+consultas son read-only y las mutaciones usan prepare/confirm/cancel. El diseño
+y las decisiones están en [Integraciones](docs/INTEGRATIONS.md).
+
 El MVP es **monoinquilino**: `SUPPORT` y `ADMIN` operan la cola completa de
 tickets. Una versión multi-tenant requerirá `tenantId` obligatorio en todos los
 recursos, consultas, claves de caché y jobs.
@@ -87,10 +85,10 @@ La secuencia completa de inicio está en [Estado y recorrido rápido](#estado-y-
 La primera ejecución requiere completar las claves RSA y los valores de MongoDB,
 Redis y cookies descritos en [Autenticación y sesiones](docs/AUTHENTICATION.md).
 
-En otra terminal, inicie los workers:
+Para levantar únicamente la infraestructura durante desarrollo del código:
 
 ```powershell
-pnpm start:worker:dev
+docker compose --env-file .env up -d mongodb redis
 ```
 
 Si MongoDB ya está instalado en `localhost:27017`, puede iniciar únicamente
@@ -125,7 +123,10 @@ si luego se elimina. Después del primer arranque, retire las tres variables.
 - `/api/admin`: roles, auditoría, dead-letter y reproceso.
 - `/api/health/live` y `/api/health/ready`.
 
-Swagger: `http://localhost:3000/docs`.
+Swagger: `http://localhost:3001/api/docs` cuando se usa el stack Docker.
+
+La etapa AWS no está activa todavía. Floci queda reservado como laboratorio
+local para esa futura integración; consulte [Floci](docs/FLOCI.md).
 
 El contrato versionado está en [docs/openapi.json](docs/openapi.json). Se genera
 desde los mismos metadatos NestJS que alimentan Swagger UI:
@@ -146,18 +147,15 @@ la API. Es una SPA React/TypeScript deliberadamente pequeña, sin kit visual
 externo: incluye autenticación, registro `USER`, restauración de sesión,
 dashboard, notificaciones, filtros, paginación, creación y detalle de tickets.
 
-Con MongoDB y Redis activos, ejecute API, worker y frontend en terminales
-separadas:
+Con el stack completo levantado:
 
 ```powershell
-pnpm start:dev
-pnpm start:worker:dev
-pnpm web:dev
+docker compose --env-file .env up --build -d
 ```
 
-Abra `http://localhost:3001`. Vite mantiene las llamadas bajo `/api` y las
-redirige a `http://localhost:3000`, evitando relajar cookies o CORS durante el
-desarrollo. El access token permanece solo en memoria; únicamente el token CSRF
+Abra `http://localhost:3001`. Nginx mantiene las llamadas bajo `/api` y las
+redirige internamente al servicio `api`, evitando relajar cookies o CORS durante
+el desarrollo. El access token permanece solo en memoria; únicamente el token CSRF
 se conserva en `sessionStorage` para poder rotar la cookie HttpOnly después de
 recargar la pestaña.
 
@@ -215,6 +213,12 @@ Para reproducir localmente el gate principal con Docker Desktop:
 
 ```powershell
 pnpm test:integration
+```
+
+El stack completo puede detenerse sin borrar la persistencia con:
+
+```powershell
+docker compose --env-file .env down
 ```
 
 El escaneo de imagen es responsabilidad del workflow porque Trivy y su base de

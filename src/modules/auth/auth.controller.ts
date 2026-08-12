@@ -22,11 +22,12 @@ import {
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
-import type { AuthenticatedRequest, IssuedSession } from './auth.types';
+import type { AuthenticatedRequest, AuthenticationResult, IssuedSession } from './auth.types';
 import { CsrfService } from './csrf.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { MfaLoginDto } from './dto/mfa-login.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -56,7 +57,24 @@ export class AuthController {
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) response: Response,
   ): Promise<Record<string, unknown>> {
-    return this.completeAuthentication(await this.authService.login(dto), response);
+    const result = await this.authService.login(dto);
+    return this.isMfaChallenge(result)
+      ? result
+      : this.completeAuthentication(result, response);
+  }
+
+  @Post('login/mfa')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Complete an MFA login challenge' })
+  async loginWithMfa(
+    @Body() dto: MfaLoginDto,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<Record<string, unknown>> {
+    return this.completeAuthentication(
+      await this.authService.loginWithMfa(dto.challengeToken, dto.code),
+      response,
+    );
   }
 
   @Post('refresh')
@@ -132,6 +150,12 @@ export class AuthController {
       expiresIn: session.accessExpiresIn,
       csrfToken,
     };
+  }
+
+  private isMfaChallenge(
+    result: AuthenticationResult,
+  ): result is Exclude<AuthenticationResult, IssuedSession> {
+    return 'mfaRequired' in result;
   }
 
   private clearSessionCookies(response: Response): void {

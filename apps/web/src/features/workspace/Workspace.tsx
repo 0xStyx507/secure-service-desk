@@ -11,6 +11,8 @@ import {
   TicketIcon,
 } from '../../components/Icons';
 import { api } from '../../lib/api';
+import { MfaPanel } from '../security/MfaPanel';
+import { McpConsole } from '../mcp/McpConsole';
 import {
   formatDate,
   initials,
@@ -40,12 +42,13 @@ const emptyTickets: Paginated<Ticket> = {
 };
 
 export function Workspace({ user, onLogout }: WorkspaceProps) {
-  const [view, setView] = useState<'overview' | 'tickets'>('overview');
+  const [view, setView] = useState<'overview' | 'tickets' | 'security' | 'mcp'>('overview');
   const [tickets, setTickets] = useState<Paginated<Ticket>>(emptyTickets);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notificationsState, setNotificationsState] = useState<'loading' | 'ready' | 'error'>(
     'loading',
   );
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [filters, setFilters] = useState<TicketFilters>({ page: 1, limit: 10 });
   const [searchInput, setSearchInput] = useState('');
   const [loading, setLoading] = useState(true);
@@ -84,6 +87,22 @@ export function Workspace({ user, onLogout }: WorkspaceProps) {
       setNotificationsState('error');
     }
   }, []);
+
+  async function markNotificationRead(notification: Notification) {
+    if (notification.readAt) return;
+    try {
+      const updated = await api.markNotificationRead(notification._id);
+      setNotifications((current) =>
+        current.map((item) => (item._id === updated._id ? updated : item)),
+      );
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : 'No fue posible marcar la notificacion como leida.',
+      );
+    }
+  }
 
   useEffect(() => {
     void loadNotifications();
@@ -127,6 +146,7 @@ export function Workspace({ user, onLogout }: WorkspaceProps) {
     : user.roles.includes('SUPPORT')
       ? 'SUPPORT'
       : 'USER';
+  const canUseMcp = user.roles.some((role) => role === 'ADMIN' || role === 'SUPPORT');
 
   function showOverview() {
     setSearchInput('');
@@ -156,6 +176,17 @@ export function Workspace({ user, onLogout }: WorkspaceProps) {
             <TicketIcon aria-hidden="true" /> Tickets
             <span className="nav-count">{tickets.pagination.total}</span>
           </button>
+          {canUseMcp && (
+            <button className={view === 'mcp' ? 'active' : ''} onClick={() => setView('mcp')}>
+              <ShieldIcon aria-hidden="true" /> MCP Console
+            </button>
+          )}
+          <button
+            className={view === 'security' ? 'active' : ''}
+            onClick={() => setView('security')}
+          >
+            <ShieldIcon aria-hidden="true" /> Seguridad
+          </button>
         </nav>
 
         <div className="sidebar__security">
@@ -182,16 +213,38 @@ export function Workspace({ user, onLogout }: WorkspaceProps) {
         <header className="topbar">
           <div>
             <p className="eyebrow">SERVICE OPERATIONS</p>
-            <h1>{view === 'overview' ? 'Centro de operaciones' : 'Cola de tickets'}</h1>
+            <h1>
+              {view === 'overview'
+                ? 'Centro de operaciones'
+                : view === 'tickets'
+                  ? 'Cola de tickets'
+                  : view === 'mcp'
+                    ? 'MCP operations console'
+                    : 'Seguridad de la cuenta'}
+            </h1>
           </div>
           <div className="topbar__actions">
             <span className="environment">
               <i /> Demo environment
             </span>
-            <button className="icon-button" aria-label="Notificaciones">
+            <button
+              className="icon-button"
+              aria-label="Notificaciones"
+              aria-expanded={notificationsOpen}
+              onClick={() => setNotificationsOpen((current) => !current)}
+            >
               <BellIcon />
               {notifications.some((item) => !item.readAt) && <span className="notification-dot" />}
             </button>
+            {notificationsOpen && (
+              <NotificationPopover
+                notifications={notifications}
+                state={notificationsState}
+                onClose={() => setNotificationsOpen(false)}
+                onRetry={loadNotifications}
+                onRead={markNotificationRead}
+              />
+            )}
             <button className="button button--primary" onClick={() => setCreateOpen(true)}>
               <PlusIcon /> Nuevo ticket
             </button>
@@ -217,7 +270,7 @@ export function Workspace({ user, onLogout }: WorkspaceProps) {
             onCreate={() => setCreateOpen(true)}
             onRetryNotifications={loadNotifications}
           />
-        ) : (
+        ) : view === 'tickets' ? (
           <TicketQueue
             data={tickets}
             filters={filters}
@@ -228,6 +281,10 @@ export function Workspace({ user, onLogout }: WorkspaceProps) {
             onFilters={setFilters}
             onOpenTicket={openTicket}
           />
+        ) : view === 'mcp' ? (
+          <McpConsole tickets={tickets.items} />
+        ) : (
+          <MfaPanel />
         )}
       </main>
 
@@ -238,6 +295,65 @@ export function Workspace({ user, onLogout }: WorkspaceProps) {
         <TicketDetail ticket={selectedTicket} onClose={() => setSelectedTicket(undefined)} />
       )}
     </div>
+  );
+}
+
+function NotificationPopover({
+  notifications,
+  state,
+  onClose,
+  onRetry,
+  onRead,
+}: {
+  notifications: Notification[];
+  state: 'loading' | 'ready' | 'error';
+  onClose: () => void;
+  onRetry: () => Promise<void>;
+  onRead: (notification: Notification) => Promise<void>;
+}) {
+  return (
+    <section className="notification-popover" aria-label="Centro de notificaciones">
+      <div className="notification-popover__head">
+        <div>
+          <p className="eyebrow">INBOX</p>
+          <strong>Notificaciones</strong>
+        </div>
+        <button className="text-button" onClick={onClose}>
+          Cerrar
+        </button>
+      </div>
+      {state === 'loading' && <p className="empty-copy">Cargando notificaciones...</p>}
+      {state === 'error' && (
+        <p className="empty-copy notification-error">
+          No fue posible cargar la bandeja.
+          <button onClick={() => void onRetry()}>Reintentar</button>
+        </p>
+      )}
+      {state === 'ready' && notifications.length === 0 && (
+        <p className="empty-copy">No hay novedades pendientes.</p>
+      )}
+      {state === 'ready' && notifications.length > 0 && (
+        <div className="notification-popover__list">
+          {notifications.map((notification) => (
+            <button
+              className={`notification-item ${notification.readAt ? 'notification-item--read' : ''}`}
+              key={notification._id}
+              onClick={() => void onRead(notification)}
+            >
+              <span className="notification-item__icon">
+                <BellIcon />
+              </span>
+              <span>
+                <strong>{notification.title}</strong>
+                <small>{notification.message}</small>
+                <em>{formatDate(notification.createdAt)}</em>
+              </span>
+              {!notification.readAt && <i className="notification-item__unread" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

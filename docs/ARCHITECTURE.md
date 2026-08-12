@@ -75,8 +75,19 @@ No existe escaneo antivirus en esta versión; es un riesgo residual explícito.
 
 ## Despliegue
 
-`compose.yml` ofrece MongoDB y Redis persistentes para desarrollo. El
-`Dockerfile` multi-stage produce una imagen no-root que puede ejecutar:
+`compose.yml` ofrece el stack completo para desarrollo: MongoDB, Redis, API,
+worker y frontend. El `Dockerfile` multi-stage produce la imagen de API/worker;
+`apps/web/Dockerfile` compila la SPA y la sirve con Nginx, que hace proxy de
+`/api` hacia el servicio NestJS. Solo Nginx publica un puerto HTTP al host; el
+API queda en la red interna de Docker.
+
+Vite mantiene un proxy equivalente únicamente para `vite dev`. No se usa como
+capa de seguridad porque desaparece al compilar. La validación autoritativa de
+JWT, CSRF, estado de usuario y roles vive en los guards/controladores NestJS;
+Nginx enruta, conserva cookies y headers de autenticación y evita la exposición
+directa del proceso API.
+
+La API y el worker usan la misma imagen, pero son procesos independientes:
 
 ```text
 node dist/main.js

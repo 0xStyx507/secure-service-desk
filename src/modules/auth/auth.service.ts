@@ -6,12 +6,13 @@ import { Model, Types } from 'mongoose';
 import { AuditService } from '../audit/audit.service';
 import { UserDocument } from '../users/schemas/user.schema';
 import { UsersService } from '../users/users.service';
-import { IssuedSession } from './auth.types';
+import { AuthenticationResult, IssuedSession } from './auth.types';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtTokenService } from './jwt-token.service';
 import { PasswordHasherService } from './password-hasher.service';
 import { RefreshSession, RefreshSessionDocument } from './schemas/refresh-session.schema';
+import { MfaService } from './mfa.service';
 
 @Injectable()
 export class AuthService {
@@ -21,6 +22,7 @@ export class AuthService {
     private readonly jwtTokenService: JwtTokenService,
     private readonly configService: ConfigService,
     private readonly auditService: AuditService,
+    private readonly mfaService: MfaService,
     @InjectModel(RefreshSession.name)
     private readonly refreshSessionModel: Model<RefreshSessionDocument>,
   ) {}
@@ -38,7 +40,7 @@ export class AuthService {
     return session;
   }
 
-  async login(dto: LoginDto): Promise<IssuedSession> {
+  async login(dto: LoginDto): Promise<AuthenticationResult> {
     const user = await this.usersService.findForAuthentication(dto.email);
     if (!user) {
       await this.auditService
@@ -67,10 +69,32 @@ export class AuthService {
     }
 
     await this.usersService.registerSuccessfulLogin(user);
+    if (user.mfaEnabled) {
+      const challenge = await this.mfaService.createChallenge(user);
+      await this.auditService.record({
+        actorId: user.id,
+        action: 'USER_LOGIN_MFA_REQUIRED',
+        resourceType: 'authentication',
+        resourceId: user.id,
+      }).catch(() => undefined);
+      return challenge;
+    }
     const session = await this.issueSession(user);
     await this.auditService.record({
       actorId: user.id,
       action: 'USER_LOGIN_SUCCEEDED',
+      resourceType: 'session',
+      resourceId: user.id,
+    }).catch(() => undefined);
+    return session;
+  }
+
+  async loginWithMfa(challengeToken: string, code: string): Promise<IssuedSession> {
+    const user = await this.mfaService.completeChallenge(challengeToken, code);
+    const session = await this.issueSession(user);
+    await this.auditService.record({
+      actorId: user.id,
+      action: 'USER_LOGIN_MFA_SUCCEEDED',
       resourceType: 'session',
       resourceId: user.id,
     }).catch(() => undefined);

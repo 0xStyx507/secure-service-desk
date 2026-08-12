@@ -13,6 +13,7 @@ import { GovernanceModule } from './modules/governance/governance.module';
 import { JobsModule } from './modules/jobs/jobs.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { TicketsModule } from './modules/tickets/tickets.module';
+import { McpModule } from './modules/mcp/mcp.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { TicketsModule } from './modules/tickets/tickets.module';
     AttachmentsModule,
     ReportsModule,
     GovernanceModule,
+    McpModule,
   ],
   controllers: [AppController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

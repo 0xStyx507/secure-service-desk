@@ -14,7 +14,8 @@ export function createOpenApiDocument(app: INestApplication) {
     .setVersion('0.1.0')
     .setOpenAPIVersion('3.0.3')
     .setLicense('MIT', 'https://opensource.org/license/mit/')
-    .addServer('http://localhost:3000/api', 'Local API base path')
+    .addServer('http://localhost:3001/api', 'Local demo reverse proxy')
+    .addServer('http://localhost:3000/api', 'Standalone API process')
     .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'bearer')
     .addCookieAuth('service_desk_refresh', { type: 'apiKey', in: 'cookie' }, 'refreshCookie')
     .addApiKey(

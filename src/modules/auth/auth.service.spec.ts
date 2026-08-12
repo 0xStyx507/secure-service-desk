@@ -8,6 +8,7 @@ import type { JwtTokenService } from './jwt-token.service';
 import type { PasswordHasherService } from './password-hasher.service';
 import type { AuditService } from '../audit/audit.service';
 import { AuthService } from './auth.service';
+import type { MfaService } from './mfa.service';
 
 describe('AuthService', () => {
   it('hashes credentials and persists only the refresh token hash on registration', async () => {
@@ -31,6 +32,9 @@ describe('AuthService', () => {
     const auditService = {
       record: jest.fn().mockResolvedValue(undefined),
     } as unknown as AuditService;
+    const mfaService = {
+      createChallenge: jest.fn(),
+    } as unknown as MfaService;
     const configService = new ConfigService({
       jwtAccessTtlSeconds: 900,
       refreshTokenTtlSeconds: 604_800,
@@ -41,6 +45,7 @@ describe('AuthService', () => {
       jwtTokenService,
       configService,
       auditService,
+      mfaService,
       refreshSessionModel,
     );
 

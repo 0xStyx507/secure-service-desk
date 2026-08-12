@@ -1,5 +1,9 @@
 import type {
   CurrentUser,
+  MfaChallenge,
+  MfaSetup,
+  MfaStatus,
+  McpToolResult,
   Notification,
   Paginated,
   ProblemDetails,
@@ -9,10 +13,12 @@ import type {
 } from '../types';
 import {
   decodeCurrentUser,
+  decodeMfaChallenge,
   decodeNotification,
   decodePage,
   decodeSession,
   decodeTicket,
+  isMfaChallenge,
 } from './contracts';
 import { resolveApiBaseUrl } from './api-origin';
 
@@ -27,6 +33,13 @@ export class ApiError extends Error {
   ) {
     super(message);
     this.name = 'ApiError';
+  }
+}
+
+export class MfaRequiredError extends Error {
+  constructor(readonly challenge: MfaChallenge) {
+    super('Se requiere un codigo MFA para continuar.');
+    this.name = 'MfaRequiredError';
   }
 }
 
@@ -58,11 +71,22 @@ export class ApiClient {
     this.sessionExpiredHandler = handler;
   }
 
-  async login(email: string, password: string): Promise<CurrentUser> {
+  async login(email: string, password: string): Promise<CurrentUser | MfaChallenge> {
+    const result = await this.publicRequest<unknown>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    if (isMfaChallenge(result)) return decodeMfaChallenge(result);
+    const session = decodeSession(result);
+    this.setSession(session);
+    return this.me();
+  }
+
+  async completeMfaLogin(challengeToken: string, code: string): Promise<CurrentUser> {
     const session = decodeSession(
-      await this.publicRequest<unknown>('/auth/login', {
+      await this.publicRequest<unknown>('/auth/login/mfa', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ challengeToken, code }),
       }),
     );
     this.setSession(session);
@@ -133,6 +157,63 @@ export class ApiClient {
     return this.request<unknown>('/notifications?page=1&limit=6').then((value) =>
       decodePage(value, decodeNotification),
     );
+  }
+
+  markNotificationRead(id: string): Promise<Notification> {
+    return this.request<unknown>(`/notifications/${encodeURIComponent(id)}/read`, {
+      method: 'PATCH',
+    }).then(decodeNotification);
+  }
+
+  getMfaStatus(): Promise<MfaStatus> {
+    return this.request<MfaStatus>('/auth/mfa/status');
+  }
+
+  setupMfa(): Promise<MfaSetup> {
+    return this.request<MfaSetup>('/auth/mfa/setup', { method: 'POST' });
+  }
+
+  verifyMfaSetup(code: string): Promise<void> {
+    return this.request<void>('/auth/mfa/verify-setup', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+  }
+
+  disableMfa(password: string, code: string): Promise<void> {
+    return this.request<void>('/auth/mfa/disable', {
+      method: 'POST',
+      body: JSON.stringify({ password, code }),
+    });
+  }
+
+  async callMcpTool(
+    name: string,
+    argumentsValue: Record<string, unknown> = {},
+  ): Promise<McpToolResult> {
+    const response = await this.request<unknown>('/mcp', {
+      method: 'POST',
+      headers: {
+        accept: 'application/json, text/event-stream',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: crypto.randomUUID(),
+        method: 'tools/call',
+        params: { name, arguments: argumentsValue },
+      }),
+    });
+    if (!response || typeof response !== 'object') {
+      throw new Error('La respuesta MCP no tiene un formato valido.');
+    }
+    const result = response as { error?: { message?: string }; result?: McpToolResult };
+    if (result.error) throw new Error(result.error.message ?? 'La herramienta MCP fallo.');
+    if (!result.result) throw new Error('La respuesta MCP no contiene resultado.');
+    if (result.result.isError) {
+      const text = result.result.content?.find((item) => item.type === 'text')?.text;
+      throw new Error(text ?? 'La herramienta MCP fallo.');
+    }
+    return result.result;
   }
 
   private async refresh(): Promise<void> {

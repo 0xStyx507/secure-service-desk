@@ -57,6 +57,20 @@ export class UsersService {
     return this.userModel.findById(id).exec();
   }
 
+  async findActiveSupportUsers(): Promise<Array<{ id: string; email: string; roles: Role[] }>> {
+    const users = await this.userModel
+      .find({
+        status: UserStatus.ACTIVE,
+        roles: { $in: [Role.SUPPORT, Role.ADMIN] },
+      })
+      .select('email roles')
+      .sort({ email: 1 })
+      .limit(50)
+      .lean()
+      .exec() as unknown as Array<Pick<User, 'email' | 'roles'> & { _id: unknown }>;
+    return users.map((user) => ({ id: String(user._id), email: user.email, roles: user.roles }));
+  }
+
   async setRoles(id: string, roles: Role[]): Promise<UserDocument> {
     const user = await this.userModel.findById(id).exec();
     if (!user) {

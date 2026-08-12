@@ -27,6 +27,7 @@
     "test:integration": "pnpm run build && jest --config ./test/jest-integration.json --runInBand"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
     "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^11.1.6",
     "@nestjs/config": "^4.0.2",
@@ -44,7 +45,8 @@
     "mongoose": "^8.18.2",
     "pdfkit": "^0.19.1",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.2"
+    "rxjs": "^7.8.2",
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.7",

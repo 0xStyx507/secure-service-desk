@@ -18,6 +18,27 @@ export interface SessionResponse {
   csrfToken: string;
 }
 
+export interface MfaChallenge {
+  mfaRequired: true;
+  challengeToken: string;
+  expiresIn: number;
+}
+
+export interface MfaStatus {
+  enabled: boolean;
+}
+
+export interface MfaSetup {
+  secret: string;
+  otpauthUri: string;
+}
+
+export interface McpToolResult {
+  content?: Array<{ type: string; text?: string }>;
+  structuredContent?: unknown;
+  isError?: boolean;
+}
+
 export interface Ticket {
   _id: string;
   id?: string;

@@ -1,5 +1,6 @@
 import type {
   CurrentUser,
+  MfaChallenge,
   Notification,
   Paginated,
   Role,
@@ -53,6 +54,27 @@ export function decodeSession(value: unknown): SessionResponse {
     expiresIn: numberField(source, 'expiresIn', 'de sesión'),
     csrfToken: stringField(source, 'csrfToken', 'de sesión'),
   };
+}
+
+export function decodeMfaChallenge(value: unknown): MfaChallenge {
+  const source = record(value, 'de desafio MFA');
+  if (source.mfaRequired !== true) {
+    throw new Error('La API devolvio un desafio MFA invalido.');
+  }
+  return {
+    mfaRequired: true,
+    challengeToken: stringField(source, 'challengeToken', 'de desafio MFA'),
+    expiresIn: numberField(source, 'expiresIn', 'de desafio MFA'),
+  };
+}
+
+export function isMfaChallenge(value: unknown): value is MfaChallenge {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    (value as Record<string, unknown>).mfaRequired === true,
+  );
 }
 
 export function decodeCurrentUser(value: unknown): CurrentUser {

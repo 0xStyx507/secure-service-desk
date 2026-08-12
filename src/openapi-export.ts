@@ -23,6 +23,10 @@ import { ReportsService } from './modules/reports/reports.service';
 import { TicketsController } from './modules/tickets/tickets.controller';
 import { TicketsService } from './modules/tickets/tickets.service';
 import { UsersService } from './modules/users/users.service';
+import { McpController } from './modules/mcp/mcp.controller';
+import { McpToolsService } from './modules/mcp/mcp-tools.service';
+import { MfaController } from './modules/auth/mfa.controller';
+import { MfaService } from './modules/auth/mfa.service';
 import { createOpenApiDocument } from './openapi';
 
 /**
@@ -39,6 +43,8 @@ import { createOpenApiDocument } from './openapi';
     ReportsController,
     NotificationsController,
     GovernanceController,
+    McpController,
+    MfaController,
   ],
   providers: [
     { provide: ConfigService, useValue: new ConfigService() },
@@ -55,6 +61,8 @@ import { createOpenApiDocument } from './openapi';
     { provide: AuditService, useValue: {} },
     { provide: UsersService, useValue: {} },
     { provide: DeadLetterAdminService, useValue: {} },
+    { provide: McpToolsService, useValue: {} },
+    { provide: MfaService, useValue: {} },
   ],
 })
 class OpenApiModule {}

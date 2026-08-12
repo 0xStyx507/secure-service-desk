@@ -462,3 +462,31 @@ El run `30835848475` sobre el commit `3e19b41` confirmó el estado integrado:
 
 Este run es la evidencia de referencia para el hardening de la imagen y el
 contrato OpenAPI versionado.
+
+## 2026-08-12 — MFA, SonarCloud y MCP
+
+### Motivo
+
+El plan de portafolio requería demostrar controles de identidad reforzados,
+análisis estático y una interfaz MCP que no pudiera convertir una instrucción
+ambigua en una mutación silenciosa del service desk.
+
+### Decisiones y cambio
+
+- MFA usa TOTP RFC 6238 propio sobre `node:crypto`; el secreto se cifra con
+  AES-256-GCM y la clave se configura fuera del repositorio.
+- El login con MFA se divide en password + desafío opaco de un solo uso; activar
+  o desactivar MFA incrementa `authzVersion` para invalidar sesiones antiguas.
+- SonarCloud es opt-in mediante `SONAR_TOKEN`, `SONAR_ORGANIZATION` y
+  `SONAR_PROJECT_KEY`, para no bloquear forks sin credenciales.
+- MCP usa el SDK TypeScript oficial, bearer JWT y los servicios de dominio. Las
+  herramientas de mutación solo preparan intenciones temporales hasta recibir
+  confirmación explícita del mismo usuario.
+- AWS no se añadió al runtime. Floci queda documentado como laboratorio de una
+  etapa posterior, sin montar Docker socket ni introducir credenciales.
+
+### Validación
+
+`pnpm lint`, las pruebas dirigidas de configuración/auth, `pnpm build` y
+`pnpm openapi:export` deben pasar. El contrato versionado incluye las rutas MFA
+y MCP.

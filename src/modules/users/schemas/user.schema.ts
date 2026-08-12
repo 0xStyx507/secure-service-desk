@@ -25,6 +25,15 @@ export class User {
   @Prop({ default: 0, min: 0 })
   authzVersion!: number;
 
+  @Prop({ default: false, index: true })
+  mfaEnabled!: boolean;
+
+  @Prop({ select: false })
+  mfaSecretEncrypted?: string;
+
+  @Prop({ select: false })
+  mfaPendingSecretEncrypted?: string;
+
   @Prop({ type: Date })
   lockedUntil?: Date;
 

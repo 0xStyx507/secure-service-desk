@@ -307,6 +307,19 @@ export class TicketsService {
     return comment;
   }
 
+  async validateComment(
+    ticketId: string,
+    dto: CreateCommentDto,
+    actor: AuthenticatedUser,
+  ): Promise<void> {
+    const ticket = await this.findTicket(ticketId);
+    this.access.assertCanCreateComment(
+      actor,
+      ticket,
+      dto.visibility ?? CommentVisibility.PUBLIC,
+    );
+  }
+
   async listComments(
     ticketId: string,
     actor: AuthenticatedUser,

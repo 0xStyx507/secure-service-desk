@@ -99,6 +99,31 @@
         ]
       }
     },
+    "/auth/login/mfa": {
+      "post": {
+        "operationId": "AuthController_loginWithMfa",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaLoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Complete an MFA login challenge",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/auth/refresh": {
       "post": {
         "operationId": "AuthController_refresh",
@@ -948,6 +973,126 @@
           "governance"
         ]
       }
+    },
+    "/mcp": {
+      "post": {
+        "operationId": "McpController_handle",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "MCP Streamable HTTP endpoint for authorized service-desk tools",
+        "tags": [
+          "mcp"
+        ]
+      }
+    },
+    "/auth/mfa/status": {
+      "get": {
+        "operationId": "MfaController_status",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Return MFA status for the authenticated user",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/mfa/setup": {
+      "post": {
+        "operationId": "MfaController_setup",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Secret and authenticator URI. Display the secret only during setup."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Generate a TOTP secret for optional MFA setup",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/mfa/verify-setup": {
+      "post": {
+        "operationId": "MfaController_verifySetup",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Verify the TOTP code and enable MFA",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/mfa/disable": {
+      "post": {
+        "operationId": "MfaController_disable",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisableMfaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Disable MFA after verifying the current TOTP code",
+        "tags": [
+          "auth"
+        ]
+      }
     }
   },
   "info": {
@@ -992,8 +1137,12 @@
   ],
   "servers": [
     {
+      "url": "http://localhost:3001/api",
+      "description": "Local demo reverse proxy"
+    },
+    {
       "url": "http://localhost:3000/api",
-      "description": "Local API base path"
+      "description": "Standalone API process"
     }
   ],
   "components": {
@@ -1052,6 +1201,24 @@
         "required": [
           "email",
           "password"
+        ]
+      },
+      "MfaLoginDto": {
+        "type": "object",
+        "properties": {
+          "challengeToken": {
+            "type": "string",
+            "description": "Opaque one-time challenge returned by /auth/login."
+          },
+          "code": {
+            "type": "string",
+            "description": "Six-digit TOTP code.",
+            "example": "123456"
+          }
+        },
+        "required": [
+          "challengeToken",
+          "code"
         ]
       },
       "CreateTicketDto": {
@@ -1189,6 +1356,37 @@
         },
         "required": [
           "roles"
+        ]
+      },
+      "MfaCodeDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Six-digit TOTP code.",
+            "example": "123456"
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "DisableMfaDto": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "description": "Current account password."
+          },
+          "code": {
+            "type": "string",
+            "description": "Current six-digit TOTP code.",
+            "example": "123456"
+          }
+        },
+        "required": [
+          "password",
+          "code"
         ]
       }
     }

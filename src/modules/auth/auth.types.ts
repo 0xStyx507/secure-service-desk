@@ -19,3 +19,9 @@ export type IssuedSession = {
   refreshToken: string;
   refreshExpiresIn: number;
 };
+
+export type AuthenticationResult = IssuedSession | {
+  mfaRequired: true;
+  challengeToken: string;
+  expiresIn: number;
+};

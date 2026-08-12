@@ -14,11 +14,34 @@ demostración navegable sin duplicar reglas de negocio en el navegador. Vive en
 - Listado con búsqueda, filtros, paginación y estados de carga/error/vacío.
 - Creación y detalle de tickets contra la API real.
 - Resumen de notificaciones persistentes.
+- Flujo MFA TOTP: desafio durante login, setup, verificacion y desactivacion.
+- Consola MCP para roles `SUPPORT` y `ADMIN`, con herramientas read-only visibles,
+  resultado sanitizado y llamadas autenticadas por JWT.
 - Layout responsive y respeto por `prefers-reduced-motion`.
 
 Adjuntos, comentarios, cambios de workflow, reportes y gobierno permanecen fuera
 de este primer corte visual. Sus APIs siguen disponibles en Swagger y pueden
 incorporarse sin cambiar la foundation.
+
+## Flujos de seguridad de la demo
+
+### MFA
+
+1. Inicia sesion con una cuenta activa.
+2. Abre `Seguridad` y selecciona `Configurar MFA`.
+3. Registra el secreto o la URI `otpauth` en una aplicacion autenticadora.
+4. Confirma el codigo de seis digitos para activar MFA.
+5. Cierra sesion y vuelve a entrar: la pantalla de acceso mostrara el segundo
+   paso. Desactivar MFA exige contrasena y codigo TOTP.
+
+### MCP
+
+Los usuarios `SUPPORT` y `ADMIN` ven `MCP Console` en la navegacion. Cada
+ejecucion usa `POST /api/mcp` con bearer JWT y el encabezado requerido por
+Streamable HTTP. La consola permite probar busqueda de tickets, resumenes,
+sugerencias y conocimiento publicado. Las acciones que cambian tickets quedan
+fuera del boton de ejecucion directa y conservan el flujo prepare/confirm/cancel
+del backend.
 
 ## Decisiones UX
 
@@ -47,14 +70,11 @@ partir de Problem Details sin mostrar stack traces.
 ## Ejecución
 
 ```powershell
-docker compose up -d
-pnpm start:dev
-pnpm start:worker:dev
-pnpm web:dev
+docker compose --env-file .env up --build -d
 ```
 
-La UI queda en `http://localhost:3001`; el proxy de Vite conserva `/api` como
-ruta de mismo origen durante desarrollo.
+La UI queda en `http://localhost:3001`; Nginx sirve los archivos estáticos y
+conserva `/api` como ruta de mismo origen, reenviándola al contenedor `api`.
 
 ## Requisitos para una demo pública
 
