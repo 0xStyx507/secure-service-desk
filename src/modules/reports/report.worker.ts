@@ -1,4 +1,5 @@
 import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
+import { ConfigService } from '@nestjs/config';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import type { Job } from 'bullmq';
 import { Readable } from 'node:stream';
@@ -37,6 +38,7 @@ export class ReportWorker extends WorkerHost {
     private readonly auditService: AuditService,
     private readonly notificationsService: NotificationsService,
     private readonly deadLetterService: DeadLetterService,
+    private readonly configService: ConfigService,
   ) {
     super();
   }
@@ -82,6 +84,9 @@ export class ReportWorker extends WorkerHost {
       report.fileId = fileId;
       report.status = ReportStatus.COMPLETED;
       report.completedAt = new Date();
+      report.expiresAt ??= new Date(
+        Date.now() + (this.configService.get<number>('pdfRetentionDays') ?? 30) * 86_400_000,
+      );
       await report.save();
     } catch (error) {
       await bucket.delete(fileId).catch(() => undefined);

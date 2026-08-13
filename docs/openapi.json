@@ -49,6 +49,21 @@
         ]
       }
     },
+    "/auth/.well-known/jwks.json": {
+      "get": {
+        "operationId": "AuthController_getJwks",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Expose public RSA keys for token verification",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/auth/register": {
       "post": {
         "operationId": "AuthController_register",

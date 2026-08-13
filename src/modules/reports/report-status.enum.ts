@@ -3,4 +3,5 @@ export enum ReportStatus {
   PROCESSING = 'PROCESSING',
   COMPLETED = 'COMPLETED',
   DEAD_LETTER = 'DEAD_LETTER',
+  PURGED = 'PURGED',
 }

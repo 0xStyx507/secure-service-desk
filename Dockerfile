@@ -28,4 +28,5 @@ COPY --from=build /app/dist ./dist
 
 USER node
 EXPOSE 3000
+HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=12 CMD node -e "fetch('http://127.0.0.1:3000/api/health/live').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
 CMD ["node", "dist/main.js"]

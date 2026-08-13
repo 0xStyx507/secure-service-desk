@@ -1,6 +1,6 @@
 import { Injectable, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { jwtVerify, SignJWT, type KeyLike } from 'jose';
+import { exportJWK, jwtVerify, SignJWT, type JWK, type KeyLike } from 'jose';
 import {
   createPrivateKey,
   createPublicKey,
@@ -10,11 +10,12 @@ import {
 import type { UserDocument } from '../users/schemas/user.schema';
 import { AuthenticatedUser } from './auth.types';
 import { Role } from './roles.enum';
+import type { JwtKeyRingEntry } from '../../config/environment.validation';
 
 @Injectable()
 export class JwtTokenService {
-  private privateKey?: Promise<KeyLike>;
-  private publicKey?: Promise<KeyLike>;
+  private readonly privateKeys = new Map<string, Promise<KeyLike>>();
+  private readonly publicKeys = new Map<string, Promise<KeyLike>>();
 
   constructor(private readonly configService: ConfigService) {}
 
@@ -32,7 +33,7 @@ export class JwtTokenService {
       .setProtectedHeader({
         alg: 'RS256',
         typ: 'JWT',
-        kid: this.getRequiredConfig('JWT_KEY_ID'),
+        kid: this.getActiveKey().kid,
       })
       .setIssuer(issuer)
       .setAudience(audience)
@@ -40,17 +41,20 @@ export class JwtTokenService {
       .setJti(randomUUID())
       .setIssuedAt(now)
       .setExpirationTime(now + ttl)
-      .sign(await this.getPrivateKey());
+      .sign(await this.getPrivateKey(this.getActiveKey()));
   }
 
   async verifyAccessToken(token: string): Promise<AuthenticatedUser> {
     try {
-      const result = await jwtVerify(token, await this.getPublicKey(), {
+      const protectedHeader = this.readProtectedHeader(token);
+      const key = this.getKeyRing().find((entry) => entry.kid === protectedHeader.kid);
+      if (!key) throw new UnauthorizedException('Invalid access token.');
+      const result = await jwtVerify(token, await this.getPublicKey(key), {
         issuer: this.getRequiredConfig('JWT_ISSUER'),
         audience: this.getRequiredConfig('JWT_AUDIENCE'),
         algorithms: ['RS256'],
       });
-      if (result.protectedHeader.kid !== this.getRequiredConfig('JWT_KEY_ID')) {
+      if (result.protectedHeader.kid !== key.kid) {
         throw new UnauthorizedException('Invalid access token.');
       }
       const roles = Array.isArray(result.payload.roles)
@@ -81,19 +85,32 @@ export class JwtTokenService {
     }
   }
 
-  private getPrivateKey(): Promise<KeyLike> {
-    this.privateKey ??= this.importPrivateKey();
-    return this.privateKey;
+  async getPublicJwks(): Promise<{ keys: JWK[] }> {
+    const keys = await Promise.all(this.getKeyRing().map(async (entry) => {
+      const jwk = await exportJWK(await this.getPublicKey(entry));
+      return { ...jwk, kid: entry.kid, alg: 'RS256', use: 'sig' };
+    }));
+    return { keys };
   }
 
-  private getPublicKey(): Promise<KeyLike> {
-    this.publicKey ??= this.importPublicKey();
-    return this.publicKey;
+  private getPrivateKey(entry: JwtKeyRingEntry): Promise<KeyLike> {
+    let key = this.privateKeys.get(entry.kid);
+    key ??= this.importPrivateKey(entry);
+    this.privateKeys.set(entry.kid, key);
+    return key;
   }
 
-  private async importPrivateKey(): Promise<KeyLike> {
+  private getPublicKey(entry: JwtKeyRingEntry): Promise<KeyLike> {
+    let key = this.publicKeys.get(entry.kid);
+    key ??= this.importPublicKey(entry);
+    this.publicKeys.set(entry.kid, key);
+    return key;
+  }
+
+  private async importPrivateKey(entry: JwtKeyRingEntry): Promise<KeyLike> {
     try {
-      const key = createPrivateKey(this.decodeKey('JWT_PRIVATE_KEY_BASE64'));
+      if (!entry.privateKeyBase64) throw new ServiceUnavailableException('JWT signing keys are not configured.');
+      const key = createPrivateKey(this.decodeKey(entry.privateKeyBase64));
       this.assertStrongRsaKey(key);
       return key;
     } catch (error) {
@@ -104,9 +121,9 @@ export class JwtTokenService {
     }
   }
 
-  private async importPublicKey(): Promise<KeyLike> {
+  private async importPublicKey(entry: JwtKeyRingEntry): Promise<KeyLike> {
     try {
-      const key = createPublicKey(this.decodeKey('JWT_PUBLIC_KEY_BASE64'));
+      const key = createPublicKey(this.decodeKey(entry.publicKeyBase64));
       this.assertStrongRsaKey(key);
       return key;
     } catch (error) {
@@ -117,12 +134,39 @@ export class JwtTokenService {
     }
   }
 
-  private decodeKey(name: string): string {
-    const encoded = this.getRequiredConfig(name);
+  private decodeKey(encoded: string): string {
     try {
       return Buffer.from(encoded, 'base64').toString('utf8');
     } catch {
       throw new ServiceUnavailableException('JWT signing keys are not configured.');
+    }
+  }
+
+  private getKeyRing(): JwtKeyRingEntry[] {
+    const ring = this.configService.get<JwtKeyRingEntry[]>('jwtKeyRing');
+    if (ring && ring.length > 0) return ring;
+    return [{
+      kid: this.getRequiredConfig('JWT_KEY_ID'),
+      privateKeyBase64: this.getRequiredConfig('JWT_PRIVATE_KEY_BASE64'),
+      publicKeyBase64: this.getRequiredConfig('JWT_PUBLIC_KEY_BASE64'),
+    }];
+  }
+
+  private getActiveKey(): JwtKeyRingEntry {
+    const active = this.getRequiredConfig('JWT_KEY_ID');
+    const key = this.getKeyRing().find((entry) => entry.kid === active);
+    if (!key || !key.privateKeyBase64) throw new ServiceUnavailableException('Active JWT signing key is not configured.');
+    return key;
+  }
+
+  private readProtectedHeader(token: string): { kid?: string } {
+    try {
+      const encoded = token.split('.')[0];
+      if (!encoded) throw new Error('Missing header');
+      const header = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as unknown;
+      return typeof header === 'object' && header !== null ? header as { kid?: string } : {};
+    } catch {
+      throw new UnauthorizedException('Invalid access token.');
     }
   }
 

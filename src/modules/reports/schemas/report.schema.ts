@@ -31,6 +31,12 @@ export class Report {
   @Prop({ type: Date })
   completedAt?: Date;
 
+  @Prop({ type: Date, index: true })
+  expiresAt?: Date;
+
+  @Prop({ type: Date })
+  purgedAt?: Date;
+
   createdAt!: Date;
   updatedAt!: Date;
 }

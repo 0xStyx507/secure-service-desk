@@ -1,0 +1,20 @@
+services:
+  floci:
+    image: floci/floci:latest@sha256:195b29ab66504a377114607dab52093ca412cbbeb067e476d58e5a01002ad385
+    restart: unless-stopped
+    profiles: ['floci']
+    ports:
+      - '4566:4566'
+    environment:
+      FLOCI_DEFAULT_REGION: us-east-1
+    volumes:
+      - floci_data:/app/data
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://127.0.0.1:4566/_floci/health >/dev/null || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+volumes:
+  floci_data:

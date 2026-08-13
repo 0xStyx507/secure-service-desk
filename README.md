@@ -76,6 +76,12 @@ Los adjuntos se descargan como archivos opacos con `nosniff`; la versión actual
 no incorpora antivirus/CDR. No debe presentarse `CONTENT_VALIDATED` como
 equivalente a “libre de malware”.
 
+Los reportes PDF tienen retención configurable (`PDF_RETENTION_DAYS`) y se
+marcan `PURGED` al retirar el archivo expirado. Las notificaciones usan un
+outbox durable recuperable desde MongoDB. La autenticación soporta un anillo
+solapado de claves RS256 mediante `JWT_KEY_RING_JSON` y publica JWKS para
+verificadores internos.
+
 ## Ejecución local
 
 Requisitos: Node.js 22, pnpm 11, MongoDB, Redis y Docker para las pruebas de
@@ -90,6 +96,15 @@ Para levantar únicamente la infraestructura durante desarrollo del código:
 ```powershell
 docker compose --env-file .env up -d mongodb redis
 ```
+
+Para activar el laboratorio cloud local de Floci:
+
+```powershell
+docker compose -f compose.yml -f compose.floci.yml --profile floci up -d
+```
+
+Floci es opcional y no reemplaza MongoDB, Redis ni BullMQ. Su alcance y los
+adaptadores futuros están documentados en [Floci](docs/FLOCI.md).
 
 Si MongoDB ya está instalado en `localhost:27017`, puede iniciar únicamente
 Redis con `docker compose up -d redis`. Los volúmenes `mongodb_data` y
@@ -152,6 +167,9 @@ Con el stack completo levantado:
 ```powershell
 docker compose --env-file .env up --build -d
 ```
+
+Esto construye dos imágenes de aplicación: `secure-service-desk-api:local`
+para API/worker y `secure-service-desk-web:local` para la SPA y su proxy Nginx.
 
 Abra `http://localhost:3001`. Nginx mantiene las llamadas bajo `/api` y las
 redirige internamente al servicio `api`, evitando relajar cookies o CORS durante

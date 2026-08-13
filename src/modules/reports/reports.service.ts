@@ -9,6 +9,7 @@ import { CreateTicketReportDto } from './dto/create-ticket-report.dto';
 import { ReportStatus } from './report-status.enum';
 import { REPORTS_QUEUE } from './reports.constants';
 import { Report, ReportDocument } from './schemas/report.schema';
+import { ConfigService } from '@nestjs/config';
 
 export interface ReportDownload {
   report: ReportDocument;
@@ -25,6 +26,7 @@ export class ReportsService {
     @InjectConnection()
     private readonly connection: Connection,
     private readonly auditService: AuditService,
+    private readonly configService: ConfigService,
   ) {}
 
   async create(
@@ -40,6 +42,9 @@ export class ReportsService {
         maxRows: dto.maxRows,
       },
       status: ReportStatus.QUEUED,
+      expiresAt: new Date(
+        Date.now() + (this.configService.get<number>('pdfRetentionDays') ?? 30) * 86_400_000,
+      ),
     });
     await this.auditService.record({
       actorId: actor.sub,

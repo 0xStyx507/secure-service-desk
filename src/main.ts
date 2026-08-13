@@ -12,13 +12,19 @@ import { StructuredLogger } from './common/logging/structured.logger';
 import type { RequestWithId } from './common/request-id.types';
 import { RequestContextService } from './infrastructure/context/request-context.service';
 import { createOpenApiDocument } from './openapi';
+import { MetricsService } from './infrastructure/observability/metrics.service';
 
 export async function createApp() {
   const app = await NestFactory.create(AppModule, {
     logger: new StructuredLogger(),
     abortOnError: false,
   });
-  configureHttpApp(app, app.get(ConfigService), app.get(RequestContextService));
+  configureHttpApp(
+    app,
+    app.get(ConfigService),
+    app.get(RequestContextService),
+    app.get(MetricsService),
+  );
 
   return app;
 }
@@ -27,6 +33,7 @@ export function configureHttpApp(
   app: INestApplication,
   configService: ConfigService,
   requestContext?: RequestContextService,
+  metricsService?: MetricsService,
 ): void {
   app.setGlobalPrefix('api');
   app.useGlobalPipes(
@@ -67,6 +74,14 @@ export function configureHttpApp(
           ...(authenticatedRequest.user?.sub ? { actorId: authenticatedRequest.user.sub } : {}),
         })}\n`,
       );
+      metricsService?.increment('secure_service_desk_http_requests_total', {
+        method: request.method,
+        route: request.route?.path ?? request.path,
+        status: String(response.statusCode),
+      });
+      metricsService?.increment('secure_service_desk_http_request_duration_ms_total', {
+        method: request.method,
+      }, Number(durationMs.toFixed(2)));
     });
     if (requestContext) {
       requestContext.run({ requestId }, next);

@@ -1,5 +1,11 @@
 type Environment = Record<string, unknown>;
 
+export interface JwtKeyRingEntry {
+  kid: string;
+  privateKeyBase64?: string;
+  publicKeyBase64: string;
+}
+
 function parsePositiveInteger(value: unknown, fallback: number, name: string): number {
   const parsed = value === undefined ? fallback : Number(value);
 
@@ -49,6 +55,11 @@ export function validateEnvironment(environment: Environment): Environment {
     60_000,
     'QUEUE_RECOVERY_INTERVAL_MS',
   );
+  const pdfRetentionDays = parsePositiveInteger(
+    environment.PDF_RETENTION_DAYS,
+    30,
+    'PDF_RETENTION_DAYS',
+  );
   const mongodbUri = String(
     environment.MONGODB_URI ?? 'mongodb://localhost:27017/secure_service_desk',
   ).trim();
@@ -68,6 +79,11 @@ export function validateEnvironment(environment: Environment): Environment {
   const jwtKeyId = String(environment.JWT_KEY_ID ?? '').trim();
   const jwtPrivateKey = String(environment.JWT_PRIVATE_KEY_BASE64 ?? '').trim();
   const jwtPublicKey = String(environment.JWT_PUBLIC_KEY_BASE64 ?? '').trim();
+  const jwtKeyRing = parseJwtKeyRing(environment.JWT_KEY_RING_JSON, {
+    kid: jwtKeyId,
+    privateKeyBase64: jwtPrivateKey,
+    publicKeyBase64: jwtPublicKey,
+  });
   const mfaEncryptionKeyBase64 = String(environment.MFA_ENCRYPTION_KEY_BASE64 ?? '').trim();
 
   if (!mongodbUri.startsWith('mongodb')) {
@@ -85,7 +101,7 @@ export function validateEnvironment(environment: Environment): Environment {
   }
   if (
     nodeEnv === 'production' &&
-    (!jwtKeyId || !jwtPrivateKey || !jwtPublicKey || corsOrigins.length === 0)
+    (!jwtKeyId || !jwtKeyRingHasActivePrivateKey(jwtKeyRing, jwtKeyId) || corsOrigins.length === 0)
   ) {
     throw new Error('JWT keys, JWT_KEY_ID and at least one CORS origin are required in production');
   }
@@ -135,6 +151,7 @@ export function validateEnvironment(environment: Environment): Environment {
     loginLockSeconds,
     cacheTtlSeconds,
     queueRecoveryIntervalMs,
+    pdfRetentionDays,
     cookieSecure,
     redisUrl,
     bootstrapAdminEmail,
@@ -143,5 +160,38 @@ export function validateEnvironment(environment: Environment): Environment {
     refreshCookieName,
     csrfCookieName,
     mfaEncryptionKeyBase64,
+    jwtKeyRing,
   };
+}
+
+function parseJwtKeyRing(value: unknown, fallback: JwtKeyRingEntry): JwtKeyRingEntry[] {
+  if (typeof value !== 'string' || value.trim() === '') {
+    return fallback.kid && fallback.privateKeyBase64 && fallback.publicKeyBase64 ? [fallback] : [];
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new Error('JWT_KEY_RING_JSON must be valid JSON');
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0 || parsed.length > 10) {
+    throw new Error('JWT_KEY_RING_JSON must contain between 1 and 10 keys');
+  }
+  return parsed.map((entry, index) => {
+    if (typeof entry !== 'object' || entry === null) {
+      throw new Error(`JWT_KEY_RING_JSON entry ${index} is invalid`);
+    }
+    const candidate = entry as Record<string, unknown>;
+    const kid = String(candidate.kid ?? '').trim();
+    const privateKeyValue = String(candidate.privateKeyBase64 ?? '').trim();
+    const publicKeyBase64 = String(candidate.publicKeyBase64 ?? '').trim();
+    if (!kid || !publicKeyBase64) {
+      throw new Error(`JWT_KEY_RING_JSON entry ${index} is incomplete`);
+    }
+    return { kid, ...(privateKeyValue ? { privateKeyBase64: privateKeyValue } : {}), publicKeyBase64 };
+  });
+}
+
+function jwtKeyRingHasActivePrivateKey(ring: JwtKeyRingEntry[], activeKid: string): boolean {
+  return ring.some((entry) => entry.kid === activeKid && Boolean(entry.privateKeyBase64));
 }

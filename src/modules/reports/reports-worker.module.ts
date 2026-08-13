@@ -5,6 +5,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { TicketsModule } from '../tickets/tickets.module';
 import { ReportWorker } from './report.worker';
 import { ReportsModule } from './reports.module';
+import { ReportRetentionService } from './report-retention.service';
 
 @Module({
   imports: [
@@ -14,6 +15,6 @@ import { ReportsModule } from './reports.module';
     ReportsModule,
     TicketsModule,
   ],
-  providers: [ReportWorker],
+  providers: [ReportWorker, ReportRetentionService],
 })
 export class ReportsWorkerModule {}

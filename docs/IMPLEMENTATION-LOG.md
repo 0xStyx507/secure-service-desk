@@ -463,6 +463,129 @@ El run `30835848475` sobre el commit `3e19b41` confirmó el estado integrado:
 Este run es la evidencia de referencia para el hardening de la imagen y el
 contrato OpenAPI versionado.
 
+## 2026-08-13 — Perfil Floci para evolución cloud local
+
+### Motivo
+
+Los siete pendientes de evolución requieren validar almacenamiento, transporte,
+secretos y observabilidad cloud sin introducir credenciales reales ni afirmar
+que AWS productivo está desplegado.
+
+### Decisión
+
+Se añadió `compose.floci.yml` como perfil opcional y reproducible. Floci queda
+aislado de la ejecución normal: MongoDB sigue siendo la fuente de verdad, Redis
+y BullMQ siguen procesando el runtime actual, y ningún módulo de negocio accede
+directamente al emulador.
+
+### Alternativas consideradas
+
+- Montar Floci en el compose principal y hacerlo obligatorio.
+- Reemplazar GridFS, Redis o BullMQ antes de demostrar paridad.
+- Simular antivirus/CDR con una respuesta positiva fija.
+- Exponer el Docker socket para que Floci cree contenedores.
+
+### Archivos afectados
+
+`compose.floci.yml`, `.env.example`, `docs/FLOCI.md`, `README.md`.
+
+### Validación
+
+La imagen oficial fue fijada por digest consultado en el registry. La
+configuración YAML, el endpoint `/_floci/health` y el healthcheck de Docker
+fueron validados localmente. El primer healthcheck usaba `wget`, que no existe
+en la imagen; se corrigió a `curl` y el contenedor quedó `healthy`. S3 y SQS
+respondieron usando credenciales dummy y el volumen `floci_data`.
+
+### Riesgos y rollback
+
+El emulador no demuestra disponibilidad, seguridad ni paridad completa de AWS
+administrado. El rollback consiste en no activar el perfil o retirar
+`compose.floci.yml` y sus variables; el stack principal no depende de él.
+
+### Estado
+
+Implementado como foundation de laboratorio; adaptadores cloud todavía no
+implementados.
+
+## 2026-08-13 — Outbox durable, retención, JWKS y métricas
+
+### Motivo
+
+Cerrar los pendientes que podían implementarse dentro del runtime sin afirmar
+multi-tenancy, antivirus/CDR ni disponibilidad administrada de AWS.
+
+### Decisiones y cambio
+
+- Las notificaciones escriben un evento en `outbox_events` y el reconciliador
+  publica eventos pendientes con IDs idempotentes en BullMQ. La atomicidad
+  estricta documento-evento queda condicionada a MongoDB replica set y no se
+  presenta como activa en el compose actual.
+- Los reportes incorporan `expiresAt`; el worker retira el archivo GridFS
+  expirado y conserva el registro como `PURGED`.
+- JWT conserva compatibilidad con las variables individuales y acepta un anillo
+  JSON de claves públicas/privadas. El `kid` activo firma y todos los miembros
+  vigentes validan; JWKS solo expone material público.
+- `/api/metrics` ofrece contadores Prometheus de baja cardinalidad sin datos de
+  identidad, tokens ni identificadores de recursos.
+
+### Alternativas descartadas
+
+- Borrar documentos de reportes junto con el PDF, porque elimina trazabilidad.
+- Hacer obligatorio el replica set sin adaptar la integración existente.
+- Simular un antivirus/CDR con una respuesta fija.
+- Poner `tenantId` opcional y llamarlo aislamiento multi-tenant.
+
+### Archivos afectados
+
+`src/modules/jobs`, `src/modules/notifications`, `src/modules/reports`,
+`src/modules/auth`, `src/infrastructure/observability`, `src/modules/health`,
+`.env.example`, `docs/openapi.json`.
+
+### Validación
+
+`pnpm lint`, `pnpm test`, `pnpm build` y `pnpm openapi:export` pasaron. La
+validación contra Floci confirmó health, S3 y SQS, pero no sustituye la
+validación de AWS administrado.
+
+### Riesgos y rollback
+
+El outbox no tiene atomicidad estricta mientras MongoDB opere sin replica set;
+la recuperación desde estados pendientes permanece como fallback. El rollback
+consiste en desactivar el anillo, conservar el campo de retención por defecto y
+no activar adaptadores externos; no se requiere borrar datos.
+
+## 2026-08-13 — Imágenes Docker separadas y demo web ejecutable
+
+### Motivo
+
+La SPA debe poder demostrarse desde Docker sin mezclarse con el proceso API, y
+cada superficie debe tener una imagen escaneable y un healthcheck coherente.
+
+### Decisiones y cambio
+
+- `secure-service-desk-api:local` se usa para API y worker; `worker` desactiva el
+  healthcheck HTTP heredado porque no sirve tráfico web.
+- `secure-service-desk-web:local` compila React/Vite y sirve los estáticos con
+  Nginx en el puerto 3001. Nginx enruta `/api` al servicio `api:3000`.
+- La resolución del upstream se difiere a petición para que la imagen web no
+  muera al ejecutarse fuera de la red Compose durante un smoke test estático.
+- Ambas imágenes tienen healthcheck; la API conserva usuario runtime `node`.
+
+### Validación
+
+Las dos imágenes construyeron correctamente. El stack Compose quedó con API y
+frontend `healthy`; `GET http://localhost:3001/` respondió `200` y
+`GET http://localhost:3001/api/health/live` atravesó el reverse proxy y respondió
+`200`. El baseline ZAP fue intentado contra el frontend, pero no terminó dentro
+del límite de cinco minutos por la descarga/ejecución lenta de la imagen ZAP.
+
+### Riesgos y rollback
+
+La imagen web requiere la red Compose para que `/api` alcance al backend; fuera
+de ella puede servir estáticos, pero las llamadas API fallarán. El rollback es
+retirar el `resolver`/variable de Nginx y los healthchecks, sin tocar datos.
+
 ## 2026-08-12 — MFA, SonarCloud y MCP
 
 ### Motivo

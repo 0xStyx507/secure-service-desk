@@ -14,6 +14,7 @@ import { JobsModule } from './modules/jobs/jobs.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { TicketsModule } from './modules/tickets/tickets.module';
 import { McpModule } from './modules/mcp/mcp.module';
+import { ObservabilityModule } from './infrastructure/observability/observability.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { McpModule } from './modules/mcp/mcp.module';
     }),
     DatabaseModule,
     InfrastructureModule,
+    ObservabilityModule,
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => [

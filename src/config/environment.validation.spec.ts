@@ -49,4 +49,16 @@ describe('validateEnvironment', () => {
       }),
     ).toThrow('QUEUE_RECOVERY_INTERVAL_MS must be a positive integer');
   });
+
+  it('accepts an overlapping JWT key ring with a public-only retired key', () => {
+    const result = validateEnvironment({
+      JWT_KEY_ID: 'current',
+      JWT_KEY_RING_JSON: JSON.stringify([
+        { kid: 'current', privateKeyBase64: 'private', publicKeyBase64: 'public' },
+        { kid: 'retired', publicKeyBase64: 'old-public' },
+      ]),
+    });
+
+    expect(result.jwtKeyRing).toHaveLength(2);
+  });
 });

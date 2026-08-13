@@ -29,6 +29,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm web:lint
       - run: pnpm test
+      - run: pnpm test:cov
       - run: pnpm web:test
       - run: pnpm test:e2e
       - run: pnpm build

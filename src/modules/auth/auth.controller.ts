@@ -28,6 +28,7 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { MfaLoginDto } from './dto/mfa-login.dto';
+import { JwtTokenService } from './jwt-token.service';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -36,7 +37,14 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly csrfService: CsrfService,
     private readonly configService: ConfigService,
+    private readonly jwtTokenService: JwtTokenService,
   ) {}
+
+  @Get('.well-known/jwks.json')
+  @ApiOperation({ summary: 'Expose public RSA keys for token verification' })
+  getJwks() {
+    return this.jwtTokenService.getPublicJwks();
+  }
 
   @Post('register')
   @Throttle({ default: { limit: 5, ttl: 60_000 } })

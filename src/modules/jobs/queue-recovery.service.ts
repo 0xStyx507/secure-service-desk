@@ -4,6 +4,9 @@ import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Queue } from 'bullmq';
 import { Model } from 'mongoose';
+import { OutboxEvent, OutboxEventDocument } from './schemas/outbox-event.schema';
+import { OutboxStatus } from './outbox-status.enum';
+import { OutboxService } from './outbox.service';
 import { NotificationDeliveryStatus } from '../notifications/notification-delivery-status.enum';
 import { NOTIFICATIONS_QUEUE } from '../notifications/notifications.constants';
 import { Notification, NotificationDocument } from '../notifications/schemas/notification.schema';
@@ -23,11 +26,14 @@ export class QueueRecoveryService implements OnApplicationBootstrap, OnModuleDes
     private readonly notificationModel: Model<NotificationDocument>,
     @InjectModel(Report.name)
     private readonly reportModel: Model<ReportDocument>,
+    @InjectModel(OutboxEvent.name)
+    private readonly outboxModel: Model<OutboxEventDocument>,
     @InjectQueue(NOTIFICATIONS_QUEUE)
     private readonly notificationsQueue: Queue,
     @InjectQueue(REPORTS_QUEUE)
     private readonly reportsQueue: Queue,
     private readonly configService: ConfigService,
+    private readonly outboxService: OutboxService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -74,7 +80,7 @@ export class QueueRecoveryService implements OnApplicationBootstrap, OnModuleDes
   }
 
   async recover(): Promise<void> {
-    const [notifications, reports] = await Promise.all([
+    const [notifications, outboxEvents, reports] = await Promise.all([
       this.notificationModel
         .find({ deliveryStatus: NotificationDeliveryStatus.PENDING })
         .sort({ createdAt: 1 })
@@ -82,6 +88,11 @@ export class QueueRecoveryService implements OnApplicationBootstrap, OnModuleDes
         .select('_id')
         .lean()
         .exec(),
+      this.outboxModel.find({
+        topic: 'notifications.deliver',
+        status: OutboxStatus.PENDING,
+        availableAt: { $lte: new Date() },
+      }).sort({ createdAt: 1 }).limit(100).exec(),
       this.reportModel
         .find({ status: ReportStatus.QUEUED })
         .sort({ createdAt: 1 })
@@ -105,6 +116,21 @@ export class QueueRecoveryService implements OnApplicationBootstrap, OnModuleDes
           },
         ),
       ),
+      ...outboxEvents.map(async (event) => {
+        const notificationId = String(event.payload.notificationId ?? event.aggregateId);
+        await this.notificationsQueue.add(
+          'deliver-internal',
+          { notificationId },
+          {
+            jobId: `notification-${notificationId}`,
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 1_000, jitter: 0.25 },
+            removeOnComplete: 1_000,
+            removeOnFail: false,
+          },
+        );
+        await this.outboxService.markDispatched(event.id);
+      }),
       ...reports.map((report) =>
         this.reportsQueue.add(
           'generate-ticket-pdf',

@@ -133,14 +133,21 @@ redactan. Los eventos son consultables únicamente por ADMIN.
 - Swagger/OpenAPI y Problem Details.
 - Helmet, CORS allowlist, throttling y logs JSON con request ID.
 
+## Laboratorio cloud local
+
+`compose.floci.yml` es un perfil opcional para validar integraciones AWS-shaped
+con Floci. No pertenece al runtime funcional de la V2 ni reemplaza MongoDB,
+Redis, BullMQ o GridFS. S3, SQS, Secrets Manager, KMS y CloudWatch quedan como
+adaptadores de infraestructura futuros; no deben acceder directamente a los
+servicios de dominio ni introducir credenciales reales.
+
 ## Riesgos residuales registrados
 
-1. No existe aislamiento multi-tenant.
-2. No existe antivirus/CDR para uploads.
-3. Los efectos derivados no usan transactional outbox.
-4. Los PDF no tienen cleanup/retención automática todavía.
-5. La rotación RS256 no mantiene un key ring solapado.
-6. La validación contra servicios administrados, TLS y topologías de producción
+1. El outbox durable ya recupera eventos, pero la atomicidad estricta documento-
+   evento requiere activar transacciones sobre un replica set de MongoDB.
+2. No existe aislamiento multi-tenant.
+3. No existe antivirus/CDR para uploads.
+4. La validación contra servicios administrados, TLS y topologías de producción
    permanece pendiente; la integración local/CI ya usa MongoDB, Redis, GridFS y
    BullMQ reales en contenedores desechables.
 

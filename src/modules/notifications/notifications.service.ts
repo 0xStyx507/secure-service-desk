@@ -6,6 +6,7 @@ import { Model, Types } from 'mongoose';
 import { ListNotificationsDto } from './dto/list-notifications.dto';
 import { Notification, NotificationDocument } from './schemas/notification.schema';
 import { NOTIFICATIONS_QUEUE } from './notifications.constants';
+import { OutboxService } from '../jobs/outbox.service';
 
 export interface CreateNotification {
   userId: string;
@@ -23,6 +24,7 @@ export class NotificationsService {
     private readonly notificationModel: Model<NotificationDocument>,
     @InjectQueue(NOTIFICATIONS_QUEUE)
     private readonly queue: Queue,
+    private readonly outboxService: OutboxService,
   ) {}
 
   async create(input: CreateNotification): Promise<void> {
@@ -30,7 +32,13 @@ export class NotificationsService {
       ...input,
       userId: new Types.ObjectId(input.userId),
     });
-    await this.enqueue(notification.id);
+    const event = await this.outboxService.record({
+      topic: 'notifications.deliver',
+      aggregateId: notification.id,
+      payload: { notificationId: notification.id },
+      eventId: `notification-${notification.id}`,
+    });
+    await this.enqueue(notification.id, event.id);
   }
 
   async createMany(inputs: CreateNotification[]): Promise<void> {
@@ -44,7 +52,15 @@ export class NotificationsService {
       })),
       { ordered: false },
     );
-    await Promise.allSettled(notifications.map((notification) => this.enqueue(notification.id)));
+    await Promise.allSettled(notifications.map(async (notification) => {
+      const event = await this.outboxService.record({
+        topic: 'notifications.deliver',
+        aggregateId: notification.id,
+        payload: { notificationId: notification.id },
+        eventId: `notification-${notification.id}`,
+      });
+      await this.enqueue(notification.id, event.id);
+    }));
   }
 
   async list(userId: string, query: ListNotificationsDto) {
@@ -87,7 +103,7 @@ export class NotificationsService {
     return notification;
   }
 
-  private async enqueue(notificationId: string): Promise<void> {
+  private async enqueue(notificationId: string, outboxId?: string): Promise<void> {
     try {
       await this.queue.add(
         'deliver-internal',
@@ -100,6 +116,7 @@ export class NotificationsService {
           removeOnFail: false,
         },
       );
+      if (outboxId) await this.outboxService.markDispatched(outboxId);
     } catch {
       // MongoDB keeps PENDING as a durable recovery marker if Redis is unavailable.
     }

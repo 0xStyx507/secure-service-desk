@@ -7,6 +7,7 @@ import { AuthController } from '../src/modules/auth/auth.controller';
 import { AuthService } from '../src/modules/auth/auth.service';
 import { CsrfService } from '../src/modules/auth/csrf.service';
 import { JwtAuthGuard } from '../src/modules/auth/jwt-auth.guard';
+import { JwtTokenService } from '../src/modules/auth/jwt-token.service';
 
 describe('authentication HTTP contract (e2e)', () => {
   let app: INestApplication;
@@ -42,6 +43,7 @@ describe('authentication HTTP contract (e2e)', () => {
           }),
         },
         { provide: AuthService, useValue: authService },
+        { provide: JwtTokenService, useValue: { getPublicJwks: jest.fn() } },
       ],
     })
       .overrideGuard(JwtAuthGuard)
