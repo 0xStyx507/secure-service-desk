@@ -12,9 +12,9 @@ describe('TicketWorkflowService', () => {
   });
 
   it('rejects skipping directly from OPEN to CLOSED', () => {
-    expect(() =>
-      service.assertTransition(TicketStatus.OPEN, TicketStatus.CLOSED),
-    ).toThrow(BadRequestException);
+    expect(() => service.assertTransition(TicketStatus.OPEN, TicketStatus.CLOSED)).toThrow(
+      BadRequestException,
+    );
   });
 
   it('allows a closed ticket to be deliberately reopened in progress', () => {

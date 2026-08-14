@@ -1,17 +1,21 @@
 import type { INestApplication, INestApplicationContext } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import { getConnectionToken } from '@nestjs/mongoose';
+import { ConfigService } from '@nestjs/config';
 import { MongoDBContainer, type StartedMongoDBContainer } from '@testcontainers/mongodb';
 import { RedisContainer, type StartedRedisContainer } from '@testcontainers/redis';
-import { generateKeyPairSync, randomUUID } from 'node:crypto';
+import { createHash, generateKeyPairSync, randomBytes, randomUUID } from 'node:crypto';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
 import type { Queue } from 'bullmq';
 import Redis from 'ioredis';
-import type { Connection } from 'mongoose';
+import type { Connection, Model } from 'mongoose';
 import request from 'supertest';
+import { MfaCryptoService } from '../../src/modules/auth/mfa-crypto.service';
+import type { UserDocument } from '../../src/modules/users/schemas/user.schema';
+import { UsersService } from '../../src/modules/users/users.service';
 import { NOTIFICATIONS_QUEUE } from '../../src/modules/notifications/notifications.constants';
 import { REPORTS_QUEUE } from '../../src/modules/reports/reports.constants';
 
@@ -50,6 +54,7 @@ const environmentKeys = [
   'BOOTSTRAP_ADMIN_EMAIL',
   'BOOTSTRAP_ADMIN_PASSWORD',
   'QUEUE_RECOVERY_INTERVAL_MS',
+  'MFA_ENCRYPTION_KEY_BASE64',
 ] as const;
 
 const originalEnvironment = new Map(environmentKeys.map((key) => [key, process.env[key]] as const));
@@ -77,6 +82,7 @@ function configureEnvironment(mongodbUri: string, redisUrl: string): void {
     BOOTSTRAP_ADMIN_EMAIL: ADMIN_EMAIL,
     BOOTSTRAP_ADMIN_PASSWORD: ADMIN_PASSWORD,
     QUEUE_RECOVERY_INTERVAL_MS: '250',
+    MFA_ENCRYPTION_KEY_BASE64: randomBytes(32).toString('base64'),
   });
 }
 
@@ -271,6 +277,128 @@ describe('real infrastructure lifecycle and integration', () => {
       });
 
     await request(app.getHttpServer()).get('/api/tickets').expect(401);
+  });
+
+  it('atomically counts concurrent failed logins and locks the account', async () => {
+    if (!app) {
+      throw new Error('Integration API was not initialized.');
+    }
+
+    const server = app.getHttpServer();
+    const email = `concurrent-login-${randomUUID()}@integration.test`;
+    await request(server)
+      .post('/api/auth/register')
+      .send({ email, password: 'ConcurrentLogin123!' })
+      .expect(201);
+
+    const connection = app.get<Connection>(getConnectionToken());
+    const userModel = connection.model<UserDocument>('User') as Model<UserDocument>;
+    const usersService = new UsersService(
+      userModel,
+      {} as never,
+      new ConfigService({ maxLoginAttempts: 5, loginLockSeconds: 900 }),
+    );
+    const registeredUser = await connection.db?.collection('users').findOne({ email });
+    if (!registeredUser?._id) {
+      throw new Error('Concurrent login test user was not persisted.');
+    }
+    await Promise.all(
+      Array.from({ length: 8 }, () =>
+        usersService.registerFailedLogin({ _id: registeredUser._id } as UserDocument),
+      ),
+    );
+
+    const storedUser = await connection.db?.collection('users').findOne({ email });
+    expect(storedUser?.failedLoginAttempts).toBe(0);
+    expect(storedUser?.lockedUntil).toBeInstanceOf(Date);
+    expect((storedUser?.lockedUntil as Date).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('atomically claims concurrent MFA attempts and consumes the challenge at the limit', async () => {
+    if (!app) {
+      throw new Error('Integration API was not initialized.');
+    }
+
+    const server = app.getHttpServer();
+    const connection = app.get<Connection>(getConnectionToken());
+    const email = `concurrent-mfa-${randomUUID()}@integration.test`;
+    await request(server)
+      .post('/api/auth/register')
+      .send({ email, password: 'ConcurrentMfa123!' })
+      .expect(201);
+
+    const encodedKey = process.env.MFA_ENCRYPTION_KEY_BASE64;
+    if (!encodedKey) {
+      throw new Error('MFA integration key was not configured.');
+    }
+    const mfaCrypto = new MfaCryptoService();
+    const secret = mfaCrypto.generateSecret();
+    await connection.db?.collection('users').updateOne(
+      { email },
+      {
+        $set: {
+          mfaEnabled: true,
+          mfaSecretEncrypted: mfaCrypto.encrypt(secret, Buffer.from(encodedKey, 'base64')),
+        },
+      },
+    );
+
+    const login = await request(server)
+      .post('/api/auth/login')
+      .send({ email, password: 'ConcurrentMfa123!' })
+      .expect(200);
+    const challengeToken = login.body.challengeToken as string;
+    expect(login.body.mfaRequired).toBe(true);
+    expect(challengeToken).toEqual(expect.any(String));
+
+    const responses = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        request(server).post('/api/auth/login/mfa').send({ challengeToken, code: '000000' }),
+      ),
+    );
+    expect(responses.every((response) => [401, 429].includes(response.status))).toBe(true);
+    expect(responses.filter((response) => response.status === 401)).toHaveLength(5);
+
+    const challengeHash = createHash('sha256').update(challengeToken).digest('hex');
+    const storedChallenge = await connection.db
+      ?.collection('mfa_challenges')
+      .findOne({ tokenHash: challengeHash });
+    expect(storedChallenge?.attempts).toBe(5);
+    expect(storedChallenge?.usedAt).toBeInstanceOf(Date);
+  });
+
+  it('requires the current password for MFA setup and confirmation', async () => {
+    if (!app) {
+      throw new Error('Integration API was not initialized.');
+    }
+
+    const server = app.getHttpServer();
+    const email = `mfa-step-up-${randomUUID()}@integration.test`;
+    const password = 'MfaStepUp123!';
+    const registration = await request(server)
+      .post('/api/auth/register')
+      .send({ email, password })
+      .expect(201);
+    const accessToken = registration.body.accessToken as string;
+
+    await request(server)
+      .post('/api/auth/mfa/setup')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ password: 'WrongPassword123!' })
+      .expect(401);
+
+    const setup = await request(server)
+      .post('/api/auth/mfa/setup')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ password })
+      .expect(201);
+    expect(setup.body.secret).toEqual(expect.any(String));
+
+    await request(server)
+      .post('/api/auth/mfa/verify-setup')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ password: 'WrongPassword123!', code: '000000' })
+      .expect(401);
   });
 
   it('persists auth, tickets and GridFS files and processes BullMQ work', async () => {

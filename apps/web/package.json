@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --configLoader runner",
     "build": "tsc && vite build --configLoader runner",
-    "lint": "tsc --noEmit --pretty false",
+    "lint": "pnpm --workspace-root exec eslint \"apps/web/src/**/*.{ts,tsx}\" \"apps/web/vite.config.ts\"",
+    "typecheck": "tsc --noEmit --pretty false",
     "test": "vitest run --configLoader runner"
   },
   "dependencies": {

@@ -66,9 +66,7 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ): Promise<Record<string, unknown>> {
     const result = await this.authService.login(dto);
-    return this.isMfaChallenge(result)
-      ? result
-      : this.completeAuthentication(result, response);
+    return this.isMfaChallenge(result) ? result : this.completeAuthentication(result, response);
   }
 
   @Post('login/mfa')

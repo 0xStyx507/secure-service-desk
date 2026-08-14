@@ -37,6 +37,12 @@ export class Report {
   @Prop({ type: Date })
   purgedAt?: Date;
 
+  @Prop({ trim: true, select: false })
+  processingJobId?: string;
+
+  @Prop({ type: Date, select: false })
+  processingAt?: Date;
+
   createdAt!: Date;
   updatedAt!: Date;
 }

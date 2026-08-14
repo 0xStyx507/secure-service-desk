@@ -1,24 +1,14 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Queue } from 'bullmq';
 import { Model } from 'mongoose';
 import { AuditService } from '../audit/audit.service';
 import { JobFailureStatus } from '../jobs/job-failure-status.enum';
-import {
-  JobFailure,
-  JobFailureDocument,
-} from '../jobs/schemas/job-failure.schema';
+import { JobFailure, JobFailureDocument } from '../jobs/schemas/job-failure.schema';
 import { NotificationDeliveryStatus } from '../notifications/notification-delivery-status.enum';
 import { NOTIFICATIONS_QUEUE } from '../notifications/notifications.constants';
-import {
-  Notification,
-  NotificationDocument,
-} from '../notifications/schemas/notification.schema';
+import { Notification, NotificationDocument } from '../notifications/schemas/notification.schema';
 import { ReportStatus } from '../reports/report-status.enum';
 import { REPORTS_QUEUE } from '../reports/reports.constants';
 import { Report, ReportDocument } from '../reports/schemas/report.schema';
@@ -43,13 +33,7 @@ export class DeadLetterAdminService {
   async list(query: ListJobFailuresDto) {
     const skip = (query.page - 1) * query.limit;
     const [items, total] = await Promise.all([
-      this.failureModel
-        .find()
-        .sort({ failedAt: -1 })
-        .skip(skip)
-        .limit(query.limit)
-        .lean()
-        .exec(),
+      this.failureModel.find().sort({ failedAt: -1 }).skip(skip).limit(query.limit).lean().exec(),
       this.failureModel.countDocuments().exec(),
     ]);
     return {
@@ -83,7 +67,7 @@ export class DeadLetterAdminService {
       } else {
         throw new BadRequestException('This queue cannot be reprocessed.');
       }
-      await this.auditService.record({
+      await this.auditService.recordCritical({
         actorId,
         action: 'DEAD_LETTER_REPROCESSED',
         resourceType: 'job_failure',
@@ -120,10 +104,7 @@ export class DeadLetterAdminService {
   }
 
   private async reprocessNotification(failure: JobFailureDocument): Promise<void> {
-    const notificationId = this.requiredString(
-      failure.payload.notificationId,
-      'notificationId',
-    );
+    const notificationId = this.requiredString(failure.payload.notificationId, 'notificationId');
     await this.notificationModel.updateOne(
       { _id: notificationId },
       { $set: { deliveryStatus: NotificationDeliveryStatus.PENDING } },

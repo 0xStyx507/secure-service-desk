@@ -21,10 +21,7 @@ export class NotificationsController {
 
   @Patch(':id/read')
   @ApiOperation({ summary: 'Mark an owned notification as read' })
-  markRead(
-    @Param('id', ParseMongoIdPipe) id: string,
-    @Req() request: AuthenticatedRequest,
-  ) {
+  markRead(@Param('id', ParseMongoIdPipe) id: string, @Req() request: AuthenticatedRequest) {
     return this.notificationsService.markRead(id, request.user.sub);
   }
 }

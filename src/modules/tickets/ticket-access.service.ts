@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { Role } from '../auth/roles.enum';
@@ -17,9 +17,7 @@ export class TicketAccessService {
     }
 
     const isRequester = ticket.requesterId.toString() === user.sub;
-    const isWatcher = ticket.watcherIds.some(
-      (id: Types.ObjectId) => id.toString() === user.sub,
-    );
+    const isWatcher = ticket.watcherIds.some((id: Types.ObjectId) => id.toString() === user.sub);
     if (!isRequester && !isWatcher) {
       throw new ForbiddenException('You cannot access this ticket.');
     }
@@ -33,6 +31,14 @@ export class TicketAccessService {
     this.assertCanRead(user, ticket);
     if (visibility === CommentVisibility.INTERNAL && !this.canManage(user)) {
       throw new ForbiddenException('Internal comments require support access.');
+    }
+  }
+
+  assertCanModifyContent(ticket: TicketDocument): void {
+    if (ticket.status === 'CLOSED') {
+      throw new ConflictException(
+        'Closed tickets are immutable for comments and attachments. Reopen the ticket first.',
+      );
     }
   }
 }

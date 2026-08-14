@@ -1,14 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Patch,
-  Post,
-  Query,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ParseMongoIdPipe } from '../../common/pipes/parse-mongo-id.pipe';
 import { AuditService } from '../audit/audit.service';
@@ -49,13 +39,13 @@ export class GovernanceController {
     @Req() request: AuthenticatedRequest,
   ) {
     const user = await this.usersService.setRoles(id, dto.roles);
-    await this.auditService.record({
+    await this.auditService.recordCritical({
       actorId: request.user.sub,
       action: 'USER_ROLES_UPDATED',
       resourceType: 'user',
       resourceId: user.id,
       metadata: { roles: user.roles },
-    }).catch(() => undefined);
+    });
     return {
       id: user.id,
       email: user.email,

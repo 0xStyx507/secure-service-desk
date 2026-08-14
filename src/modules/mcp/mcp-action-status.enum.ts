@@ -1,0 +1,7 @@
+export enum McpActionStatus {
+  PENDING = 'PENDING',
+  EXECUTING = 'EXECUTING',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED',
+  CANCELLED = 'CANCELLED',
+}

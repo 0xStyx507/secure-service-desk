@@ -9,7 +9,14 @@ const PARALLELIZATION = 1;
 export class PasswordHasherService {
   async hash(password: string): Promise<string> {
     const salt = randomBytes(16);
-    const derivedKey = await this.derive(password, salt, KEY_LENGTH, COST, BLOCK_SIZE, PARALLELIZATION);
+    const derivedKey = await this.derive(
+      password,
+      salt,
+      KEY_LENGTH,
+      COST,
+      BLOCK_SIZE,
+      PARALLELIZATION,
+    );
 
     return [
       'scrypt',

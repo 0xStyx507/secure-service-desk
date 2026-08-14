@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CacheService } from './cache/cache.service';
+import { CloudModule } from './cloud/cloud.module';
 import { redisConnectionOptions } from './redis/redis-connection-options';
 import { RequestContextService } from './context/request-context.service';
 
@@ -9,6 +10,7 @@ import { RequestContextService } from './context/request-context.service';
 @Module({
   imports: [
     ConfigModule,
+    CloudModule,
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
@@ -17,6 +19,6 @@ import { RequestContextService } from './context/request-context.service';
     }),
   ],
   providers: [CacheService, RequestContextService],
-  exports: [CacheService, RequestContextService, BullModule],
+  exports: [CacheService, RequestContextService, BullModule, CloudModule],
 })
 export class InfrastructureModule {}

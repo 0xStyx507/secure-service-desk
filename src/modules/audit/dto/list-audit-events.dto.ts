@@ -1,14 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import {
-  IsInt,
-  IsMongoId,
-  IsOptional,
-  IsString,
-  Length,
-  Max,
-  Min,
-} from 'class-validator';
+import { IsInt, IsMongoId, IsOptional, IsString, Length, Max, Min } from 'class-validator';
 
 function toNumber(value: unknown): unknown {
   return typeof value === 'string' && value.trim() !== '' ? Number(value) : value;

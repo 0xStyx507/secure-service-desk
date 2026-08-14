@@ -14,6 +14,7 @@ import { TicketStatus } from '../tickets/ticket-status.enum';
 import { ReportStatus } from './report-status.enum';
 import { REPORTS_QUEUE } from './reports.constants';
 import { Report, ReportDocument } from './schemas/report.schema';
+import { sanitizeSensitiveData } from '../../common/security/sanitize-sensitive-data';
 
 interface ReportJob {
   reportId: string;
@@ -44,33 +45,69 @@ export class ReportWorker extends WorkerHost {
   }
 
   async process(job: Job<ReportJob>): Promise<{ fileId: string }> {
-    const report = await this.reportModel.findById(job.data.reportId).exec();
-    if (!report) {
-      throw new Error('Report no longer exists.');
-    }
-    if (report.status === ReportStatus.COMPLETED && report.fileId) {
-      return { fileId: report.fileId.toString() };
-    }
+    const processingJobId = String(job.id ?? `report-${job.data.reportId}`);
+    const claimed = await this.claimReport(job.data.reportId, processingJobId);
+    if (claimed.fileId !== undefined) return { fileId: claimed.fileId };
+    const report = claimed.report;
+    if (!report) throw new Error('Report is not available for processing.');
     if (!this.connection.db) {
       throw new Error('Report storage is unavailable.');
     }
 
-    report.status = ReportStatus.PROCESSING;
-    report.error = undefined;
-    await report.save();
     const filters = this.parseFilters(report.filters);
+    const tickets = await this.loadTickets(filters);
+    const pdf = await this.renderPdf(tickets, filters);
+    const bucket = new mongo.GridFSBucket(this.connection.db, { bucketName: 'reports' });
+    const fileId = await this.storePdf(bucket, report, pdf);
+    await this.completeReport(report, processingJobId, fileId, bucket);
+    await this.notifyReport(job.data.actorId, report, tickets.length);
+    return { fileId: fileId.toHexString() };
+  }
+
+  private async claimReport(
+    reportId: string,
+    processingJobId: string,
+  ): Promise<{ report?: ReportDocument; fileId?: string }> {
+    const report = await this.reportModel
+      .findOneAndUpdate(
+        { _id: reportId, status: ReportStatus.QUEUED },
+        {
+          $set: { status: ReportStatus.PROCESSING, processingJobId, processingAt: new Date() },
+          $unset: { error: 1 },
+        },
+        { new: true },
+      )
+      .exec();
+    if (report) return { report };
+    const current = await this.reportModel.findById(reportId).exec();
+    if (!current) throw new Error('Report no longer exists.');
+    if (current.status === ReportStatus.COMPLETED && current.fileId) {
+      return { fileId: current.fileId.toString() };
+    }
+    if (current.status === ReportStatus.PROCESSING) {
+      return { fileId: current.fileId?.toString() ?? '' };
+    }
+    throw new Error('Report is not available for processing.');
+  }
+
+  private async loadTickets(filters: ReportFilters): Promise<Array<Record<string, unknown>>> {
     const query: FilterQuery<TicketDocument> = {};
     if (filters.status) query.status = filters.status;
     if (filters.priority) query.priority = filters.priority;
-    const tickets = await this.ticketModel
+    return this.ticketModel
       .find(query)
       .sort({ createdAt: -1 })
       .limit(filters.maxRows)
       .lean()
       .exec();
-    const pdf = await this.renderPdf(tickets, filters);
-    const bucket = new mongo.GridFSBucket(this.connection.db, { bucketName: 'reports' });
-    const fileId = await new Promise<mongo.ObjectId>((resolve, reject) => {
+  }
+
+  private async storePdf(
+    bucket: mongo.GridFSBucket,
+    report: ReportDocument,
+    pdf: Buffer,
+  ): Promise<mongo.ObjectId> {
+    return new Promise<mongo.ObjectId>((resolve, reject) => {
       const upload = bucket.openUploadStream(`tickets-${report.id}.pdf`, {
         contentType: 'application/pdf',
         metadata: { reportId: report.id, requestedBy: report.requestedBy.toString() },
@@ -79,27 +116,44 @@ export class ReportWorker extends WorkerHost {
       upload.once('finish', () => resolve(upload.id));
       Readable.from(pdf).pipe(upload);
     });
+  }
 
+  private async completeReport(
+    report: ReportDocument,
+    processingJobId: string,
+    fileId: mongo.ObjectId,
+    bucket: mongo.GridFSBucket,
+  ): Promise<void> {
     try {
-      report.fileId = fileId;
-      report.status = ReportStatus.COMPLETED;
-      report.completedAt = new Date();
-      report.expiresAt ??= new Date(
-        Date.now() + (this.configService.get<number>('pdfRetentionDays') ?? 30) * 86_400_000,
-      );
-      await report.save();
+      const expiresAt =
+        report.expiresAt ??
+        new Date(
+          Date.now() + (this.configService.get<number>('pdfRetentionDays') ?? 30) * 86_400_000,
+        );
+      const completion = await this.reportModel
+        .updateOne(
+          { _id: report._id, status: ReportStatus.PROCESSING, processingJobId },
+          {
+            $set: { fileId, status: ReportStatus.COMPLETED, completedAt: new Date(), expiresAt },
+            $unset: { processingJobId: 1, processingAt: 1, error: 1 },
+          },
+        )
+        .exec();
+      if (completion.modifiedCount !== 1) throw new Error('Report claim was lost.');
     } catch (error) {
       await bucket.delete(fileId).catch(() => undefined);
       throw error;
     }
+  }
 
+  private async notifyReport(actorId: string, report: ReportDocument, rows: number): Promise<void> {
     await Promise.allSettled([
       this.auditService.record({
-        actorId: job.data.actorId,
+        actorId,
         action: 'REPORT_COMPLETED',
         resourceType: 'report',
         resourceId: report.id,
-        metadata: { rows: tickets.length },
+        metadata: { rows },
       }),
       this.notificationsService.create({
         userId: report.requestedBy.toString(),
@@ -110,7 +164,6 @@ export class ReportWorker extends WorkerHost {
         resourceId: report.id,
       }),
     ]);
-    return { fileId: fileId.toHexString() };
   }
 
   @OnWorkerEvent('failed')
@@ -122,24 +175,35 @@ export class ReportWorker extends WorkerHost {
     const attempts = job.opts.attempts ?? 1;
     if (job.attemptsMade >= attempts) {
       await this.reportModel.updateOne(
-        { _id: job.data.reportId },
+        {
+          _id: job.data.reportId,
+          status: ReportStatus.PROCESSING,
+          processingJobId: String(job.id),
+        },
         {
           $set: {
             status: ReportStatus.DEAD_LETTER,
-            error: error.message.slice(0, 2_000),
+            error: sanitizeSensitiveData(error.message, { maxStringLength: 2_000 }) as string,
           },
+          $unset: { processingJobId: 1, processingAt: 1 },
         },
       );
+      return;
     }
+    await this.reportModel.updateOne(
+      { _id: job.data.reportId, status: ReportStatus.PROCESSING, processingJobId: String(job.id) },
+      {
+        $set: { status: ReportStatus.QUEUED },
+        $unset: { processingJobId: 1, processingAt: 1, error: 1 },
+      },
+    );
   }
 
   private parseFilters(filters: Record<string, unknown>): ReportFilters {
     const status = Object.values(TicketStatus).includes(filters.status as TicketStatus)
       ? (filters.status as TicketStatus)
       : undefined;
-    const priority = Object.values(TicketPriority).includes(
-      filters.priority as TicketPriority,
-    )
+    const priority = Object.values(TicketPriority).includes(filters.priority as TicketPriority)
       ? (filters.priority as TicketPriority)
       : undefined;
     const maxRows =
@@ -177,10 +241,7 @@ export class ReportWorker extends WorkerHost {
       for (const ticket of tickets) {
         document
           .fontSize(11)
-          .text(
-            `${String(ticket.number)} — ${String(ticket.subject)}`,
-            { continued: false },
-          );
+          .text(`${String(ticket.number)} — ${String(ticket.subject)}`, { continued: false });
         document
           .fontSize(9)
           .fillColor('#444444')

@@ -15,6 +15,18 @@ La API administra usuarios y sesiones sin un proveedor funcional externo.
 
 MongoDB guarda el hash SHA-256 del refresh token, nunca el valor reutilizable.
 
+## Step-up para configurar MFA
+
+Un access token valido no es suficiente para iniciar o confirmar el alta de
+MFA. `POST /api/auth/mfa/setup` exige la contrasena actual antes de generar el
+secreto temporal, y `POST /api/auth/mfa/verify-setup` exige nuevamente la
+contrasena junto con el codigo TOTP antes de activar MFA.
+
+La baja conserva el requisito de contrasena actual mas TOTP en
+`POST /api/auth/mfa/disable`. La activacion y desactivacion incrementan
+`authzVersion`, invalidando access tokens emitidos con permisos anteriores, y
+registran los eventos de auditoria `MFA_ENABLED` y `MFA_DISABLED`.
+
 ## Crear las claves RS256
 
 Las claves no deben incorporarse a Git. Un ejemplo con OpenSSL:

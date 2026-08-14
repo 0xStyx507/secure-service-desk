@@ -15,9 +15,7 @@ import { Report, ReportSchema } from './schemas/report.schema';
     AuthModule,
     NotificationsModule,
     BullModule.registerQueue({ name: REPORTS_QUEUE }),
-    MongooseModule.forFeature([
-      { name: Report.name, schema: ReportSchema },
-    ]),
+    MongooseModule.forFeature([{ name: Report.name, schema: ReportSchema }]),
   ],
   controllers: [ReportsController],
   providers: [ReportsService],

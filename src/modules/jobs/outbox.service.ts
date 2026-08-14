@@ -28,9 +28,11 @@ export class OutboxService {
   }
 
   async markDispatched(id: string): Promise<void> {
-    await this.outboxModel.updateOne(
-      { _id: id, status: 'PENDING' },
-      { $set: { status: 'DISPATCHED', dispatchedAt: new Date() }, $unset: { lastError: 1 } },
-    ).exec();
+    await this.outboxModel
+      .updateOne(
+        { _id: id, status: 'PENDING' },
+        { $set: { status: 'DISPATCHED', dispatchedAt: new Date() }, $unset: { lastError: 1 } },
+      )
+      .exec();
   }
 }

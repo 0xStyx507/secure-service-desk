@@ -1,4 +1,5 @@
 import { Injectable, LoggerService } from '@nestjs/common';
+import { sanitizeSensitiveData } from '../security/sanitize-sensitive-data';
 
 @Injectable()
 export class StructuredLogger implements LoggerService {
@@ -35,31 +36,24 @@ export class StructuredLogger implements LoggerService {
             stack: message.stack,
           }
         : message;
+    const sanitizedMessage = sanitizeSensitiveData(normalizedMessage, {
+      maxDepth: 5,
+      maxProperties: 30,
+      maxStringLength: 2_000,
+    });
     const entry = {
       timestamp: new Date().toISOString(),
       level,
       context,
-      message: this.redact(
-        typeof normalizedMessage === 'string'
-          ? normalizedMessage
-          : JSON.stringify(normalizedMessage, (key, value: unknown) =>
-              /password|token|cookie|authorization|secret|private.?key/i.test(key)
-                ? '[REDACTED]'
-                : value,
-            ),
-      ),
-      ...(trace ? { trace: this.redact(trace) } : {}),
+      message:
+        typeof sanitizedMessage === 'string' ? sanitizedMessage : JSON.stringify(sanitizedMessage),
+      ...(trace
+        ? {
+            trace: sanitizeSensitiveData(trace, { maxStringLength: 5_000 }) as string,
+          }
+        : {}),
     };
 
     process.stdout.write(`${JSON.stringify(entry)}\n`);
-  }
-
-  private redact(value: string): string {
-    return value
-      .replace(/\bBearer\s+[A-Za-z0-9._~-]+/gi, 'Bearer [REDACTED]')
-      .replace(
-        /("(?:password|token|cookie|authorization|secret|private.?key)"\s*:\s*)"[^"]*"/gi,
-        '$1"[REDACTED]"',
-      );
   }
 }

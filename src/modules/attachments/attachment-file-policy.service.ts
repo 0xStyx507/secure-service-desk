@@ -1,9 +1,6 @@
 import { BadRequestException, Injectable, PayloadTooLargeException } from '@nestjs/common';
 import { basename } from 'node:path';
-import {
-  ALLOWED_ATTACHMENT_MIME_TYPES,
-  MAX_ATTACHMENT_BYTES,
-} from './attachments.constants';
+import { ALLOWED_ATTACHMENT_MIME_TYPES, MAX_ATTACHMENT_BYTES } from './attachments.constants';
 
 export interface UploadedAttachment {
   originalname: string;
@@ -53,25 +50,15 @@ export class AttachmentFilePolicyService {
     ) {
       return 'image/png';
     }
-    if (
-      buffer.length >= 3 &&
-      buffer[0] === 0xff &&
-      buffer[1] === 0xd8 &&
-      buffer[2] === 0xff
-    ) {
+    if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
       return 'image/jpeg';
     }
     return undefined;
   }
 
-  private assertSafeDimensions(
-    buffer: Buffer,
-    mimeType: ValidatedAttachment['mimeType'],
-  ): void {
+  private assertSafeDimensions(buffer: Buffer, mimeType: ValidatedAttachment['mimeType']): void {
     const dimensions =
-      mimeType === 'image/png'
-        ? this.readPngDimensions(buffer)
-        : this.readJpegDimensions(buffer);
+      mimeType === 'image/png' ? this.readPngDimensions(buffer) : this.readJpegDimensions(buffer);
     if (
       !dimensions ||
       dimensions.width < 1 ||
@@ -84,15 +71,11 @@ export class AttachmentFilePolicyService {
     }
   }
 
-  private readPngDimensions(
-    buffer: Buffer,
-  ): { width: number; height: number } | undefined {
+  private readPngDimensions(buffer: Buffer): { width: number; height: number } | undefined {
     if (buffer.length < 45) {
       return undefined;
     }
-    const hasHeader =
-      buffer.readUInt32BE(8) === 13 &&
-      buffer.toString('ascii', 12, 16) === 'IHDR';
+    const hasHeader = buffer.readUInt32BE(8) === 13 && buffer.toString('ascii', 12, 16) === 'IHDR';
     const hasEnd =
       buffer.readUInt32BE(buffer.length - 12) === 0 &&
       buffer.toString('ascii', buffer.length - 8, buffer.length - 4) === 'IEND';
@@ -105,42 +88,51 @@ export class AttachmentFilePolicyService {
     };
   }
 
-  private readJpegDimensions(
-    buffer: Buffer,
-  ): { width: number; height: number } | undefined {
-    if (
-      buffer.length < 12 ||
-      buffer[buffer.length - 2] !== 0xff ||
-      buffer[buffer.length - 1] !== 0xd9
-    ) {
-      return undefined;
-    }
+  private readJpegDimensions(buffer: Buffer): { width: number; height: number } | undefined {
+    if (!this.hasJpegEndMarker(buffer)) return undefined;
     const startOfFrameMarkers = new Set([
-      0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce,
-      0xcf,
+      0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf,
     ]);
     let offset = 2;
     while (offset + 8 < buffer.length) {
-      if (buffer[offset] !== 0xff) {
-        offset += 1;
-        continue;
-      }
-      const marker = buffer[offset + 1];
-      if (marker === undefined || marker === 0xd9 || marker === 0xda) {
-        break;
-      }
-      const segmentLength = buffer.readUInt16BE(offset + 2);
-      if (segmentLength < 2 || offset + 2 + segmentLength > buffer.length) {
-        return undefined;
-      }
-      if (startOfFrameMarkers.has(marker) && segmentLength >= 7) {
-        return {
-          height: buffer.readUInt16BE(offset + 5),
-          width: buffer.readUInt16BE(offset + 7),
-        };
-      }
-      offset += 2 + segmentLength;
+      const segment = this.readJpegSegment(buffer, offset, startOfFrameMarkers);
+      if (segment?.dimensions) return segment.dimensions;
+      if (!segment || segment.stop) return undefined;
+      offset = segment.nextOffset;
     }
     return undefined;
+  }
+
+  private hasJpegEndMarker(buffer: Buffer): boolean {
+    return (
+      buffer.length >= 12 &&
+      buffer[buffer.length - 2] === 0xff &&
+      buffer[buffer.length - 1] === 0xd9
+    );
+  }
+
+  private readJpegSegment(
+    buffer: Buffer,
+    offset: number,
+    startOfFrameMarkers: Set<number>,
+  ):
+    | { nextOffset: number; stop?: boolean; dimensions?: { width: number; height: number } }
+    | undefined {
+    if (buffer[offset] !== 0xff) return { nextOffset: offset + 1 };
+    const marker = buffer[offset + 1];
+    if (marker === undefined || marker === 0xd9 || marker === 0xda)
+      return { nextOffset: offset, stop: true };
+    const segmentLength = buffer.readUInt16BE(offset + 2);
+    if (segmentLength < 2 || offset + 2 + segmentLength > buffer.length) return undefined;
+    if (startOfFrameMarkers.has(marker) && segmentLength >= 7) {
+      return {
+        nextOffset: offset,
+        dimensions: {
+          height: buffer.readUInt16BE(offset + 5),
+          width: buffer.readUInt16BE(offset + 7),
+        },
+      };
+    }
+    return { nextOffset: offset + 2 + segmentLength };
   }
 }

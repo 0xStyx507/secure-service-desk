@@ -61,11 +61,24 @@ export class McpToolsService {
   async suggestPriority(actor: AuthenticatedUser, ticketId: string) {
     const ticket = await this.ticketsService.findOne(ticketId, actor);
     const text = `${ticket.subject} ${ticket.description}`.toLowerCase();
-    const critical = /security breach|data loss|production down|ransomware|unauthorized access/.test(text);
+    const critical =
+      /security breach|data loss|production down|ransomware|unauthorized access/.test(text);
     const high = /urgent|outage|cannot login|blocked|payment failed/.test(text);
-    const priority = critical ? TicketPriority.CRITICAL : high ? TicketPriority.HIGH : TicketPriority.MEDIUM;
-    const result = { ticketId, suggestedPriority: priority, currentPriority: ticket.priority, confidence: critical || high ? 'medium' : 'low' };
-    await this.auditTool(actor, 'MCP_TOOL_SUGGEST_PRIORITY', { ticketId, suggestedPriority: priority });
+    const priority = critical
+      ? TicketPriority.CRITICAL
+      : high
+        ? TicketPriority.HIGH
+        : TicketPriority.MEDIUM;
+    const result = {
+      ticketId,
+      suggestedPriority: priority,
+      currentPriority: ticket.priority,
+      confidence: critical || high ? 'medium' : 'low',
+    };
+    await this.auditTool(actor, 'MCP_TOOL_SUGGEST_PRIORITY', {
+      ticketId,
+      suggestedPriority: priority,
+    });
     return result;
   }
 
@@ -76,10 +89,17 @@ export class McpToolsService {
     const result = {
       ticketId,
       currentAssigneeId: ticket.assigneeId?.toString(),
-      recommendedAssignee: recommended ? { id: recommended.id, email: recommended.email, roles: recommended.roles } : null,
-      reason: recommended ? 'First active support candidate in deterministic email order.' : 'No active support candidate is available.',
+      recommendedAssignee: recommended
+        ? { id: recommended.id, email: recommended.email, roles: recommended.roles }
+        : null,
+      reason: recommended
+        ? 'First active support candidate in deterministic email order.'
+        : 'No active support candidate is available.',
     };
-    await this.auditTool(actor, 'MCP_TOOL_SUGGEST_ASSIGNEE', { ticketId, hasRecommendation: Boolean(recommended) });
+    await this.auditTool(actor, 'MCP_TOOL_SUGGEST_ASSIGNEE', {
+      ticketId,
+      hasRecommendation: Boolean(recommended),
+    });
     return result;
   }
 
@@ -99,14 +119,20 @@ export class McpToolsService {
     return this.actions.cancel(actor, actionToken);
   }
 
-  private async auditTool(actor: AuthenticatedUser, action: string, metadata: Record<string, unknown>) {
-    await this.auditService.record({
-      actorId: actor.sub,
-      action,
-      resourceType: 'mcp_tool',
-      resourceId: actor.sub,
-      metadata,
-    }).catch(() => undefined);
+  private async auditTool(
+    actor: AuthenticatedUser,
+    action: string,
+    metadata: Record<string, unknown>,
+  ) {
+    await this.auditService
+      .record({
+        actorId: actor.sub,
+        action,
+        resourceType: 'mcp_tool',
+        resourceId: actor.sub,
+        metadata,
+      })
+      .catch(() => undefined);
   }
 
   private sanitize(value: unknown): unknown {
@@ -120,7 +146,10 @@ export const searchTicketsSchema = z.object({
   search: z.string().min(1).max(100).optional(),
   status: z.nativeEnum(TicketStatus).optional(),
   priority: z.nativeEnum(TicketPriority).optional(),
-  assigneeId: z.string().regex(/^[a-f\d]{24}$/i).optional(),
+  assigneeId: z
+    .string()
+    .regex(/^[a-f\d]{24}$/i)
+    .optional(),
 });
 
 export const prepareCommentSchema = z.object({
@@ -134,7 +163,11 @@ export const prepareStatusChangeSchema = z.object({
   version: z.number().int().min(0),
   status: z.nativeEnum(TicketStatus).optional(),
   priority: z.nativeEnum(TicketPriority).optional(),
-  assigneeId: z.string().regex(/^[a-f\d]{24}$/i).nullable().optional(),
+  assigneeId: z
+    .string()
+    .regex(/^[a-f\d]{24}$/i)
+    .nullable()
+    .optional(),
   resolution: z.string().trim().min(5).max(5_000).optional(),
 });
 

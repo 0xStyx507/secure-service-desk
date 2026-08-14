@@ -6,7 +6,10 @@ import { GovernanceModule } from '../governance/governance.module';
 import { TicketsModule } from '../tickets/tickets.module';
 import { UsersModule } from '../users/users.module';
 import { KnowledgeArticle, KnowledgeArticleSchema } from './schemas/knowledge-article.schema';
-import { McpPendingAction, McpPendingActionSchema } from '../governance/schemas/mcp-pending-action.schema';
+import {
+  McpPendingAction,
+  McpPendingActionSchema,
+} from '../governance/schemas/mcp-pending-action.schema';
 import { KnowledgeBaseService } from './knowledge-base.service';
 import { McpActionService } from './mcp-action.service';
 import { McpController } from './mcp.controller';

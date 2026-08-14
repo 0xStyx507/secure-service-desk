@@ -4,9 +4,7 @@ describe('MfaCryptoService', () => {
   const service = new MfaCryptoService();
 
   it('verifies the RFC 6238 reference vector with a clock window', () => {
-    expect(
-      service.verifyCode('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ', '287082', 59_000),
-    ).toBe(true);
+    expect(service.verifyCode('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ', '287082', 59_000)).toBe(true);
   });
 
   it('encrypts and decrypts a secret without returning plaintext ciphertext', () => {

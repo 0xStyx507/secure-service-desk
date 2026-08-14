@@ -10,12 +10,7 @@ import {
   StreamableFile,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiAcceptedResponse,
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiAcceptedResponse, ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { ParseMongoIdPipe } from '../../common/pipes/parse-mongo-id.pipe';
 import { AuthenticatedRequest } from '../auth/auth.types';
@@ -38,19 +33,13 @@ export class ReportsController {
   @HttpCode(202)
   @ApiAcceptedResponse({ description: 'Report queued for asynchronous generation.' })
   @ApiOperation({ summary: 'Queue a ticket PDF report' })
-  create(
-    @Body() dto: CreateTicketReportDto,
-    @Req() request: AuthenticatedRequest,
-  ) {
+  create(@Body() dto: CreateTicketReportDto, @Req() request: AuthenticatedRequest) {
     return this.reportsService.create(dto, request.user);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Read the status of an owned report job' })
-  findOne(
-    @Param('id', ParseMongoIdPipe) id: string,
-    @Req() request: AuthenticatedRequest,
-  ) {
+  findOne(@Param('id', ParseMongoIdPipe) id: string, @Req() request: AuthenticatedRequest) {
     return this.reportsService.findOne(id, request.user);
   }
 

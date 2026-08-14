@@ -29,10 +29,7 @@ export class ReportsService {
     private readonly configService: ConfigService,
   ) {}
 
-  async create(
-    dto: CreateTicketReportDto,
-    actor: AuthenticatedUser,
-  ): Promise<ReportDocument> {
+  async create(dto: CreateTicketReportDto, actor: AuthenticatedUser): Promise<ReportDocument> {
     const report = await this.reportModel.create({
       requestedBy: new Types.ObjectId(actor.sub),
       type: 'TICKETS',
@@ -46,13 +43,15 @@ export class ReportsService {
         Date.now() + (this.configService.get<number>('pdfRetentionDays') ?? 30) * 86_400_000,
       ),
     });
-    await this.auditService.record({
-      actorId: actor.sub,
-      action: 'REPORT_REQUESTED',
-      resourceType: 'report',
-      resourceId: report.id,
-      metadata: { type: report.type, filters: report.filters },
-    }).catch(() => undefined);
+    await this.auditService
+      .record({
+        actorId: actor.sub,
+        action: 'REPORT_REQUESTED',
+        resourceType: 'report',
+        resourceId: report.id,
+        metadata: { type: report.type, filters: report.filters },
+      })
+      .catch(() => undefined);
 
     try {
       await this.queue.add(

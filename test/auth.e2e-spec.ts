@@ -51,10 +51,7 @@ describe('authentication HTTP contract (e2e)', () => {
       .compile();
 
     app = moduleRef.createNestApplication();
-    configureHttpApp(
-      app,
-      new ConfigService({ corsOrigins: ['https://portfolio.example'] }),
-    );
+    configureHttpApp(app, new ConfigService({ corsOrigins: ['https://portfolio.example'] }));
     await app.init();
   });
 
@@ -85,10 +82,7 @@ describe('authentication HTTP contract (e2e)', () => {
     const response = await request(app.getHttpServer())
       .post('/api/auth/refresh')
       .set('Origin', 'https://portfolio.example')
-      .set('Cookie', [
-        'service_desk_refresh=opaque-refresh-token',
-        'service_desk_csrf=csrf-value',
-      ])
+      .set('Cookie', ['service_desk_refresh=opaque-refresh-token', 'service_desk_csrf=csrf-value'])
       .set('x-csrf-token', 'csrf-value')
       .expect(200);
 
@@ -100,10 +94,7 @@ describe('authentication HTTP contract (e2e)', () => {
     await request(app.getHttpServer())
       .post('/api/auth/refresh')
       .set('Origin', 'https://evil.example')
-      .set('Cookie', [
-        'service_desk_refresh=opaque-refresh-token',
-        'service_desk_csrf=csrf-value',
-      ])
+      .set('Cookie', ['service_desk_refresh=opaque-refresh-token', 'service_desk_csrf=csrf-value'])
       .set('x-csrf-token', 'csrf-value')
       .expect(401);
   });
@@ -122,10 +113,7 @@ describe('authentication HTTP contract (e2e)', () => {
   it('maps malformed cookie encoding to 401 instead of 500', async () => {
     await request(app.getHttpServer())
       .post('/api/auth/refresh')
-      .set(
-        'Cookie',
-        'service_desk_refresh=%E0%A4%A; service_desk_csrf=csrf-value',
-      )
+      .set('Cookie', 'service_desk_refresh=%E0%A4%A; service_desk_csrf=csrf-value')
       .set('x-csrf-token', 'csrf-value')
       .expect(401);
   });

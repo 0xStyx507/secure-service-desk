@@ -12,5 +12,4 @@ export class AdminBootstrapState {
   completedAt!: Date;
 }
 
-export const AdminBootstrapStateSchema =
-  SchemaFactory.createForClass(AdminBootstrapState);
+export const AdminBootstrapStateSchema = SchemaFactory.createForClass(AdminBootstrapState);

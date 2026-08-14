@@ -20,8 +20,10 @@ export type IssuedSession = {
   refreshExpiresIn: number;
 };
 
-export type AuthenticationResult = IssuedSession | {
-  mfaRequired: true;
-  challengeToken: string;
-  expiresIn: number;
-};
+export type AuthenticationResult =
+  | IssuedSession
+  | {
+      mfaRequired: true;
+      challengeToken: string;
+      expiresIn: number;
+    };

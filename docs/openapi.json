@@ -485,6 +485,82 @@
         ]
       }
     },
+    "/tickets/{id}/watchers": {
+      "post": {
+        "operationId": "TicketsController_addWatcher",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddTicketWatcherDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Add an active user as a ticket watcher",
+        "tags": [
+          "tickets"
+        ]
+      }
+    },
+    "/tickets/{id}/watchers/{userId}": {
+      "delete": {
+        "operationId": "TicketsController_removeWatcher",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove a ticket watcher",
+        "tags": [
+          "tickets"
+        ]
+      }
+    },
     "/tickets/{ticketId}/attachments": {
       "post": {
         "operationId": "AttachmentsController_upload",
@@ -1033,6 +1109,16 @@
       "post": {
         "operationId": "MfaController_setup",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaSetupDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Secret and authenticator URI. Display the secret only during setup."
@@ -1058,7 +1144,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/MfaCodeDto"
+                "$ref": "#/components/schemas/VerifyMfaSetupDto"
               }
             }
           }
@@ -1323,6 +1409,18 @@
           "body"
         ]
       },
+      "AddTicketWatcherDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "description": "Active user to add as a ticket watcher."
+          }
+        },
+        "required": [
+          "userId"
+        ]
+      },
       "CreateTicketReportDto": {
         "type": "object",
         "properties": {
@@ -1373,16 +1471,35 @@
           "roles"
         ]
       },
-      "MfaCodeDto": {
+      "MfaSetupDto": {
         "type": "object",
         "properties": {
+          "password": {
+            "type": "string",
+            "description": "Current account password.",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "password"
+        ]
+      },
+      "VerifyMfaSetupDto": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "description": "Current account password.",
+            "writeOnly": true
+          },
           "code": {
             "type": "string",
-            "description": "Six-digit TOTP code.",
+            "description": "Current six-digit TOTP code.",
             "example": "123456"
           }
         },
         "required": [
+          "password",
           "code"
         ]
       },

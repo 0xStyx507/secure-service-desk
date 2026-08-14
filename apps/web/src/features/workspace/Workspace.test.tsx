@@ -12,6 +12,19 @@ const apiMock = vi.hoisted(() => ({
 }));
 
 vi.mock('../../lib/api', () => ({ api: apiMock }));
+vi.mock('../tickets/api', () => ({
+  ticketsApi: {
+    list: apiMock.listTickets,
+    create: apiMock.createTicket,
+    get: apiMock.getTicket,
+  },
+}));
+vi.mock('../notifications/api', () => ({
+  notificationsApi: {
+    list: apiMock.listNotifications,
+    markRead: apiMock.markNotificationRead,
+  },
+}));
 
 const user: CurrentUser = {
   sub: '507f1f77bcf86cd799439011',

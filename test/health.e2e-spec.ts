@@ -15,8 +15,7 @@ describe('health endpoints (e2e)', () => {
         { provide: 'DatabaseConnection', useValue: { readyState: 1 } },
         { provide: CacheService, useValue: { ping: jest.fn().mockResolvedValue(true) } },
       ],
-    })
-      .compile();
+    }).compile();
 
     app = await moduleRef.createNestApplication().init();
   });

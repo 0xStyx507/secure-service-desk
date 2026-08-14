@@ -19,10 +19,7 @@ import { REPORTS_QUEUE } from '../reports/reports.constants';
     NotificationsModule,
     ReportsModule,
     UsersModule,
-    BullModule.registerQueue(
-      { name: NOTIFICATIONS_QUEUE },
-      { name: REPORTS_QUEUE },
-    ),
+    BullModule.registerQueue({ name: NOTIFICATIONS_QUEUE }, { name: REPORTS_QUEUE }),
   ],
   controllers: [GovernanceController],
   providers: [DeadLetterAdminService],

@@ -8,13 +8,7 @@ import { ReportsModule } from './reports.module';
 import { ReportRetentionService } from './report-retention.service';
 
 @Module({
-  imports: [
-    AuditModule,
-    JobsModule,
-    NotificationsModule,
-    ReportsModule,
-    TicketsModule,
-  ],
+  imports: [AuditModule, JobsModule, NotificationsModule, ReportsModule, TicketsModule],
   providers: [ReportWorker, ReportRetentionService],
 })
 export class ReportsWorkerModule {}

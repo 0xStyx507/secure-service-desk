@@ -52,15 +52,17 @@ export class NotificationsService {
       })),
       { ordered: false },
     );
-    await Promise.allSettled(notifications.map(async (notification) => {
-      const event = await this.outboxService.record({
-        topic: 'notifications.deliver',
-        aggregateId: notification.id,
-        payload: { notificationId: notification.id },
-        eventId: `notification-${notification.id}`,
-      });
-      await this.enqueue(notification.id, event.id);
-    }));
+    await Promise.allSettled(
+      notifications.map(async (notification) => {
+        const event = await this.outboxService.record({
+          topic: 'notifications.deliver',
+          aggregateId: notification.id,
+          payload: { notificationId: notification.id },
+          eventId: `notification-${notification.id}`,
+        });
+        await this.enqueue(notification.id, event.id);
+      }),
+    );
   }
 
   async list(userId: string, query: ListNotificationsDto) {

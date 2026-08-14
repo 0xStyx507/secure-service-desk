@@ -4,9 +4,7 @@ import { AuditService } from './audit.service';
 import { AuditEvent, AuditEventSchema } from './schemas/audit-event.schema';
 
 @Module({
-  imports: [
-    MongooseModule.forFeature([{ name: AuditEvent.name, schema: AuditEventSchema }]),
-  ],
+  imports: [MongooseModule.forFeature([{ name: AuditEvent.name, schema: AuditEventSchema }])],
   providers: [AuditService],
   exports: [AuditService, MongooseModule],
 })

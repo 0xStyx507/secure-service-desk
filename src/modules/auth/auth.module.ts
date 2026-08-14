@@ -19,6 +19,7 @@ import { MfaChallenge, MfaChallengeSchema } from './schemas/mfa-challenge.schema
 import { MfaCryptoService } from './mfa-crypto.service';
 import { MfaService } from './mfa.service';
 import { MfaController } from './mfa.controller';
+import { SessionService } from './session.service';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { MfaController } from './mfa.controller';
     AdminBootstrapService,
     MfaCryptoService,
     MfaService,
+    SessionService,
   ],
   exports: [UsersModule, JwtAuthGuard, RolesGuard, JwtTokenService],
 })

@@ -10,10 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { Model } from 'mongoose';
 import { Role } from '../auth/roles.enum';
 import { User, UserDocument } from './schemas/user.schema';
-import {
-  RoleMutationLock,
-  RoleMutationLockDocument,
-} from './schemas/role-mutation-lock.schema';
+import { RoleMutationLock, RoleMutationLockDocument } from './schemas/role-mutation-lock.schema';
 import { UserStatus } from './user-status.enum';
 
 @Injectable()
@@ -58,7 +55,7 @@ export class UsersService {
   }
 
   async findActiveSupportUsers(): Promise<Array<{ id: string; email: string; roles: Role[] }>> {
-    const users = await this.userModel
+    const users = (await this.userModel
       .find({
         status: UserStatus.ACTIVE,
         roles: { $in: [Role.SUPPORT, Role.ADMIN] },
@@ -67,7 +64,7 @@ export class UsersService {
       .sort({ email: 1 })
       .limit(50)
       .lean()
-      .exec() as unknown as Array<Pick<User, 'email' | 'roles'> & { _id: unknown }>;
+      .exec()) as unknown as Array<Pick<User, 'email' | 'roles'> & { _id: unknown }>;
     return users.map((user) => ({ id: String(user._id), email: user.email, roles: user.roles }));
   }
 
@@ -109,14 +106,41 @@ export class UsersService {
   async registerFailedLogin(user: UserDocument): Promise<void> {
     const maxAttempts = this.configService.get<number>('maxLoginAttempts') ?? 5;
     const lockSeconds = this.configService.get<number>('loginLockSeconds') ?? 900;
-    user.failedLoginAttempts += 1;
+    const now = new Date();
+    const lockUntil = new Date(now.getTime() + lockSeconds * 1_000);
 
-    if (user.failedLoginAttempts >= maxAttempts) {
-      user.lockedUntil = new Date(Date.now() + lockSeconds * 1_000);
-      user.failedLoginAttempts = 0;
-    }
-
-    await user.save();
+    await this.userModel
+      .findOneAndUpdate(
+        {
+          _id: user._id,
+          $or: [{ lockedUntil: { $exists: false } }, { lockedUntil: { $lte: now } }],
+        },
+        [
+          {
+            $set: {
+              failedLoginAttempts: {
+                $add: [{ $ifNull: ['$failedLoginAttempts', 0] }, 1],
+              },
+            },
+          },
+          {
+            $set: {
+              lockedUntil: {
+                $cond: [
+                  { $gte: ['$failedLoginAttempts', maxAttempts] },
+                  lockUntil,
+                  { $ifNull: ['$lockedUntil', '$$REMOVE'] },
+                ],
+              },
+              failedLoginAttempts: {
+                $cond: [{ $gte: ['$failedLoginAttempts', maxAttempts] }, 0, '$failedLoginAttempts'],
+              },
+            },
+          },
+        ],
+        { new: true },
+      )
+      .exec();
   }
 
   async registerSuccessfulLogin(user: UserDocument): Promise<void> {
@@ -146,10 +170,7 @@ export class UsersService {
         .findOneAndUpdate(
           {
             key: 'admin-role-mutation',
-            $or: [
-              { lockedUntil: { $lte: new Date() } },
-              { lockedUntil: { $exists: false } },
-            ],
+            $or: [{ lockedUntil: { $lte: new Date() } }, { lockedUntil: { $exists: false } }],
           },
           {
             $set: {

@@ -35,7 +35,26 @@ export function configureHttpApp(
   requestContext?: RequestContextService,
   metricsService?: MetricsService,
 ): void {
+  configureHttpTransport(app, configService);
+  configureHttpMiddleware(app, configService, requestContext, metricsService);
+  app.useGlobalFilters(new GlobalHttpExceptionFilter());
+  configureSwagger(app);
+}
+
+function configureHttpTransport(app: INestApplication, configService: ConfigService): void {
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .set('trust proxy', configService.get<number>('trustProxyHops', 0));
   app.setGlobalPrefix('api');
+}
+
+function configureHttpMiddleware(
+  app: INestApplication,
+  configService: ConfigService,
+  requestContext?: RequestContextService,
+  metricsService?: MetricsService,
+): void {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -49,48 +68,74 @@ export function configureHttpApp(
     origin: configService.get<string[]>('corsOrigins', []),
     credentials: true,
   });
-  app.use((request: Request, response: Response, next: NextFunction) => {
+  app.use(createRequestMiddleware(requestContext, metricsService));
+}
+
+function createRequestMiddleware(
+  requestContext?: RequestContextService,
+  metricsService?: MetricsService,
+): (request: Request, response: Response, next: NextFunction) => void {
+  return (request, response, next) => {
     const requestWithId = request as RequestWithId;
     const requestId = request.header('x-request-id') ?? randomUUID();
-
     requestWithId.requestId = requestId;
     response.setHeader('x-request-id', requestId);
-    const startedAt = process.hrtime.bigint();
-    response.once('finish', () => {
-      const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
-      const authenticatedRequest = request as Request & {
-        user?: { sub?: string };
-      };
-      process.stdout.write(
-        `${JSON.stringify({
-          timestamp: new Date().toISOString(),
-          level: 'info',
-          event: 'http_request_completed',
-          requestId,
-          method: request.method,
-          path: request.path,
-          statusCode: response.statusCode,
-          durationMs: Number(durationMs.toFixed(2)),
-          ...(authenticatedRequest.user?.sub ? { actorId: authenticatedRequest.user.sub } : {}),
-        })}\n`,
-      );
-      metricsService?.increment('secure_service_desk_http_requests_total', {
-        method: request.method,
-        route: request.route?.path ?? request.path,
-        status: String(response.statusCode),
-      });
-      metricsService?.increment('secure_service_desk_http_request_duration_ms_total', {
-        method: request.method,
-      }, Number(durationMs.toFixed(2)));
-    });
+    requestStartTimes.set(request, process.hrtime.bigint());
+    response.once('finish', () =>
+      recordCompletedRequest(request, response, requestId, metricsService),
+    );
     if (requestContext) {
       requestContext.run({ requestId }, next);
       return;
     }
     next();
-  });
-  app.useGlobalFilters(new GlobalHttpExceptionFilter());
+  };
+}
 
+function recordCompletedRequest(
+  request: Request,
+  response: Response,
+  requestId: string,
+  metricsService?: MetricsService,
+): void {
+  const durationMs = Number(process.hrtime.bigint() - requestStartedAt(request)) / 1_000_000;
+  const authenticatedRequest = request as Request & { user?: { sub?: string } };
+  process.stdout.write(
+    `${JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      event: 'http_request_completed',
+      requestId,
+      method: request.method,
+      path: request.path,
+      statusCode: response.statusCode,
+      durationMs: Number(durationMs.toFixed(2)),
+      ...(authenticatedRequest.user?.sub ? { actorId: authenticatedRequest.user.sub } : {}),
+    })}\n`,
+  );
+  metricsService?.increment('secure_service_desk_http_requests_total', {
+    method: request.method,
+    route: request.route?.path ?? 'unmatched',
+    status: String(response.statusCode),
+  });
+  metricsService?.increment(
+    'secure_service_desk_http_request_duration_ms_total',
+    { method: request.method },
+    Number(durationMs.toFixed(2)),
+  );
+}
+
+const requestStartTimes = new WeakMap<Request, bigint>();
+
+function requestStartedAt(request: Request): bigint {
+  const existing = requestStartTimes.get(request);
+  if (existing) return existing;
+  const startedAt = process.hrtime.bigint();
+  requestStartTimes.set(request, startedAt);
+  return startedAt;
+}
+
+function configureSwagger(app: INestApplication): void {
   const document = createOpenApiDocument(app);
   SwaggerModule.setup('docs', app, document);
 }

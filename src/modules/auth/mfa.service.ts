@@ -35,8 +35,9 @@ export class MfaService {
     private readonly passwordHasher: PasswordHasherService,
   ) {}
 
-  async setup(userId: string): Promise<{ secret: string; otpauthUri: string }> {
-    const user = await this.findUserWithMfa(userId);
+  async setup(userId: string, password: string): Promise<{ secret: string; otpauthUri: string }> {
+    const user = await this.findUserWithMfa(userId, true);
+    await this.assertCurrentPassword(user, password);
     if (user.mfaEnabled) throw new ConflictException('MFA is already enabled.');
     const secret = this.crypto.generateSecret();
     user.mfaPendingSecretEncrypted = this.crypto.encrypt(secret, this.encryptionKey());
@@ -44,8 +45,9 @@ export class MfaService {
     return { secret, otpauthUri: this.crypto.buildOtpAuthUri(secret, user.email) };
   }
 
-  async verifySetup(userId: string, code: string): Promise<void> {
-    const user = await this.findUserWithMfa(userId);
+  async verifySetup(userId: string, password: string, code: string): Promise<void> {
+    const user = await this.findUserWithMfa(userId, true);
+    await this.assertCurrentPassword(user, password);
     if (!user.mfaPendingSecretEncrypted) {
       throw new ConflictException('MFA setup has not started.');
     }
@@ -56,23 +58,18 @@ export class MfaService {
     user.mfaEnabled = true;
     user.authzVersion += 1;
     await user.save();
-    await this.auditService.record({
+    await this.auditService.recordCritical({
       actorId: user.id,
       action: 'MFA_ENABLED',
       resourceType: 'user',
       resourceId: user.id,
       metadata: { method: 'TOTP' },
-    }).catch(() => undefined);
+    });
   }
 
   async disable(userId: string, password: string, code: string): Promise<void> {
-    const user = await this.userModel
-      .findById(userId)
-      .select('+passwordHash +mfaSecretEncrypted +mfaPendingSecretEncrypted')
-      .exec();
-    if (!user || !(await this.passwordHasher.verify(password, user.passwordHash))) {
-      throw new UnauthorizedException('Invalid credentials.');
-    }
+    const user = await this.findUserWithMfa(userId, true);
+    await this.assertCurrentPassword(user, password);
     if (!user.mfaEnabled || !user.mfaSecretEncrypted) {
       throw new ConflictException('MFA is not enabled.');
     }
@@ -83,13 +80,13 @@ export class MfaService {
     user.mfaPendingSecretEncrypted = undefined;
     user.authzVersion += 1;
     await user.save();
-    await this.auditService.record({
+    await this.auditService.recordCritical({
       actorId: user.id,
       action: 'MFA_DISABLED',
       resourceType: 'user',
       resourceId: user.id,
       metadata: { method: 'TOTP' },
-    }).catch(() => undefined);
+    });
   }
 
   async status(userId: string): Promise<{ enabled: boolean }> {
@@ -109,46 +106,79 @@ export class MfaService {
 
   async completeChallenge(challengeToken: string, code: string): Promise<UserDocument> {
     const challenge = await this.challengeModel
-      .findOne({ tokenHash: this.hash(challengeToken), usedAt: { $exists: false } })
-      .select('+tokenHash')
+      .findOneAndUpdate(
+        {
+          tokenHash: this.hash(challengeToken),
+          usedAt: { $exists: false },
+          expiresAt: { $gt: new Date() },
+          attempts: { $lt: this.maxAttempts },
+        },
+        { $inc: { attempts: 1 } },
+        { new: true },
+      )
       .exec();
-    if (!challenge || challenge.expiresAt.getTime() <= Date.now() || challenge.attempts >= this.maxAttempts) {
+    if (!challenge) {
       throw new UnauthorizedException('Invalid or expired MFA challenge.');
     }
+
     const user = await this.findUserWithMfa(challenge.userId.toString());
     const secret = user.mfaSecretEncrypted
       ? this.crypto.decrypt(user.mfaSecretEncrypted, this.encryptionKey())
       : undefined;
     if (!user.mfaEnabled || !secret || !this.crypto.verifyCode(secret, code)) {
-      challenge.attempts += 1;
-      if (challenge.attempts >= this.maxAttempts) challenge.usedAt = new Date();
-      await challenge.save();
+      if (challenge.attempts >= this.maxAttempts) {
+        await this.challengeModel
+          .updateOne(
+            {
+              _id: challenge._id,
+              usedAt: { $exists: false },
+              attempts: { $gte: this.maxAttempts },
+            },
+            { $set: { usedAt: new Date() } },
+          )
+          .exec();
+      }
       throw new UnauthorizedException('Invalid MFA code.');
     }
-    const consumed = await this.challengeModel.findOneAndUpdate(
-      { _id: challenge._id, usedAt: { $exists: false } },
-      { $set: { usedAt: new Date() } },
-      { new: true },
-    ).exec();
+
+    const consumed = await this.challengeModel
+      .findOneAndUpdate(
+        {
+          _id: challenge._id,
+          usedAt: { $exists: false },
+          expiresAt: { $gt: new Date() },
+        },
+        { $set: { usedAt: new Date() } },
+        { new: true },
+      )
+      .exec();
     if (!consumed) throw new UnauthorizedException('MFA challenge already used.');
     return user;
   }
 
-  private async findUserWithMfa(userId: string): Promise<UserDocument> {
-    const user = await this.userModel
-      .findById(userId)
-      .select('+mfaSecretEncrypted +mfaPendingSecretEncrypted')
-      .exec();
+  private async findUserWithMfa(userId: string, includePassword = false): Promise<UserDocument> {
+    const selection = includePassword
+      ? '+passwordHash +mfaSecretEncrypted +mfaPendingSecretEncrypted'
+      : '+mfaSecretEncrypted +mfaPendingSecretEncrypted';
+    const user = await this.userModel.findById(userId).select(selection).exec();
     if (!user) throw new UnauthorizedException('User is not available.');
     return user;
   }
 
+  private async assertCurrentPassword(user: UserDocument, password: string): Promise<void> {
+    if (!(await this.passwordHasher.verify(password, user.passwordHash))) {
+      throw new UnauthorizedException('Invalid credentials.');
+    }
+  }
+
   private encryptionKey(): Buffer {
-    const encoded = this.configService.get<string>('mfaEncryptionKeyBase64') ??
+    const encoded =
+      this.configService.get<string>('mfaEncryptionKeyBase64') ??
       this.configService.get<string>('MFA_ENCRYPTION_KEY_BASE64');
     if (!encoded) throw new ServiceUnavailableException('MFA encryption key is not configured.');
     const key = Buffer.from(encoded, 'base64');
-    if (key.length !== 32) throw new ServiceUnavailableException('MFA encryption key must be 32 bytes.');
+    if (key.length !== 32)
+      throw new ServiceUnavailableException('MFA encryption key must be 32 bytes.');
     return key;
   }
 

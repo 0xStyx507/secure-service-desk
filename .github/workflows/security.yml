@@ -26,7 +26,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm audit:prod
+      - run: pnpm format:check
       - run: pnpm lint
+      - run: pnpm typecheck
       - run: pnpm web:lint
       - run: pnpm test
       - run: pnpm test:cov
@@ -55,6 +57,69 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm test:integration
+
+  dast:
+    name: DAST with OWASP ZAP
+    needs: [quality, integration]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      COMPOSE_PROJECT_NAME: secure-service-desk-dast
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Create ephemeral CI environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          private_key="$(openssl genrsa 2048 2>/dev/null)"
+          private_key_b64="$(printf '%s' "$private_key" | base64 -w0)"
+          public_key_b64="$(printf '%s' "$private_key" | openssl rsa -pubout 2>/dev/null | base64 -w0)"
+          mfa_key_b64="$(openssl rand -base64 32 | tr -d '\n')"
+          sed -i \
+            -e "s|^JWT_KEY_ID=.*|JWT_KEY_ID=ci-dast-key|" \
+            -e "s|^JWT_PRIVATE_KEY_BASE64=.*|JWT_PRIVATE_KEY_BASE64=$private_key_b64|" \
+            -e "s|^JWT_PUBLIC_KEY_BASE64=.*|JWT_PUBLIC_KEY_BASE64=$public_key_b64|" \
+            -e "s|^MFA_ENCRYPTION_KEY_BASE64=.*|MFA_ENCRYPTION_KEY_BASE64=$mfa_key_b64|" \
+            -e 's|^MONGODB_URI=.*|MONGODB_URI=mongodb://mongodb:27017/secure_service_desk|' \
+            -e 's|^REDIS_URL=.*|REDIS_URL=redis://redis:6379|' \
+            -e 's|^CORS_ORIGINS=.*|CORS_ORIGINS=http://localhost:3001|' \
+            .env
+          mkdir -p artifacts/zap
+      - name: Build and start disposable stack
+        run: docker compose -f compose.yml up --build --detach --wait --wait-timeout 180
+      - name: Smoke check disposable stack
+        run: |
+          curl --fail --silent --show-error http://127.0.0.1:3001/
+          docker compose -f compose.yml exec -T api node -e "fetch('http://127.0.0.1:3000/api/health/live').then(r => process.exit(r.ok ? 0 : 1))"
+      - name: Run ZAP baseline against frontend proxy
+        continue-on-error: true
+        run: |
+          docker run --rm --network secure-service-desk-dast_default \
+            -v "$PWD/artifacts/zap:/zap/wrk/:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t http://web:3001 -m 2 -I \
+            -r frontend-baseline.html -J frontend-baseline.json
+      - name: Run ZAP API scan against OpenAPI
+        continue-on-error: true
+        run: |
+          docker run --rm --network secure-service-desk-dast_default \
+            -v "$PWD/artifacts/zap:/zap/wrk/:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-api-scan.py -t http://api:3000/api/docs-json -f openapi -I \
+            -r api-scan.html -J api-scan.json
+      - name: Upload ZAP reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: zap-reports
+          path: artifacts/zap/
+          if-no-files-found: warn
+      - name: Stop disposable stack
+        if: ${{ always() }}
+        run: docker compose -f compose.yml down --volumes --remove-orphans
 
   sonar:
     name: SonarCloud analysis

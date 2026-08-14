@@ -17,4 +17,18 @@ describe('StructuredLogger', () => {
     expect(entry.message).toEqual(expect.stringContaining('bootstrap failed'));
     expect(entry.message).toEqual(expect.stringContaining('Error'));
   });
+
+  it('sanitizes nested log metadata and trace credentials', () => {
+    const write = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    new StructuredLogger().error(
+      { request: { headers: { authorization: 'Bearer secret' }, input: [{ token: 'value' }] } },
+      'password=secret-value',
+      'Security',
+    );
+
+    const entry = JSON.parse(String(write.mock.calls[0]?.[0])) as Record<string, unknown>;
+    expect(entry.message).toBe('{"request":{"headers":{},"input":[{}]}}');
+    expect(entry.trace).toBe('password=[REDACTED]');
+  });
 });

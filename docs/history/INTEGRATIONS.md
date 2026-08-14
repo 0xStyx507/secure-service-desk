@@ -69,6 +69,22 @@ Herramientas mutating:
 - `confirm_action`
 - `cancel_action`
 
+Las acciones mutantes usan una maquina de estados persistida en MongoDB:
+
+```text
+PENDING -> EXECUTING -> COMPLETED
+                     \-> FAILED
+
+PENDING -> CANCELLED
+```
+
+`confirm_action` reclama el token con una transicion atomica
+`PENDING -> EXECUTING`; una segunda confirmacion no puede reclamarlo. La
+mutacion de `TicketsService` se ejecuta despues del claim y solo entonces se
+marca `COMPLETED`. Si falla, se persiste `FAILED` con un codigo y mensaje
+generico, sin guardar detalles potencialmente sensibles. La expiracion y el
+RBAC del usuario que preparo la accion se conservan.
+
 Las dos primeras solo validan permisos y guardan una intención temporal. El
 token de acción se almacena como hash, caduca a los cinco minutos y queda ligado
 al usuario que lo preparó. Solo `confirm_action` ejecuta el servicio de tickets;

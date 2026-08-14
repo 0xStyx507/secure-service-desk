@@ -80,7 +80,7 @@ export class QueueRecoveryService implements OnApplicationBootstrap, OnModuleDes
   }
 
   async recover(): Promise<void> {
-    const [notifications, outboxEvents, reports] = await Promise.all([
+    const pending = await Promise.all([
       this.notificationModel
         .find({ deliveryStatus: NotificationDeliveryStatus.PENDING })
         .sort({ createdAt: 1 })
@@ -88,11 +88,15 @@ export class QueueRecoveryService implements OnApplicationBootstrap, OnModuleDes
         .select('_id')
         .lean()
         .exec(),
-      this.outboxModel.find({
-        topic: 'notifications.deliver',
-        status: OutboxStatus.PENDING,
-        availableAt: { $lte: new Date() },
-      }).sort({ createdAt: 1 }).limit(100).exec(),
+      this.outboxModel
+        .find({
+          topic: 'notifications.deliver',
+          status: OutboxStatus.PENDING,
+          availableAt: { $lte: new Date() },
+        })
+        .sort({ createdAt: 1 })
+        .limit(100)
+        .exec(),
       this.reportModel
         .find({ status: ReportStatus.QUEUED })
         .sort({ createdAt: 1 })
@@ -101,54 +105,71 @@ export class QueueRecoveryService implements OnApplicationBootstrap, OnModuleDes
         .lean()
         .exec(),
     ]);
-
     const enqueueResults = await Promise.allSettled([
-      ...notifications.map((notification) =>
-        this.notificationsQueue.add(
-          'deliver-internal',
-          { notificationId: notification._id.toString() },
-          {
-            jobId: `notification-${notification._id.toString()}`,
-            attempts: 3,
-            backoff: { type: 'exponential', delay: 1_000, jitter: 0.25 },
-            removeOnComplete: 1_000,
-            removeOnFail: false,
-          },
-        ),
-      ),
-      ...outboxEvents.map(async (event) => {
-        const notificationId = String(event.payload.notificationId ?? event.aggregateId);
-        await this.notificationsQueue.add(
-          'deliver-internal',
-          { notificationId },
-          {
-            jobId: `notification-${notificationId}`,
-            attempts: 3,
-            backoff: { type: 'exponential', delay: 1_000, jitter: 0.25 },
-            removeOnComplete: 1_000,
-            removeOnFail: false,
-          },
-        );
-        await this.outboxService.markDispatched(event.id);
-      }),
-      ...reports.map((report) =>
-        this.reportsQueue.add(
-          'generate-ticket-pdf',
-          {
-            reportId: report._id.toString(),
-            actorId: report.requestedBy.toString(),
-          },
-          {
-            jobId: `report-${report._id.toString()}`,
-            attempts: 3,
-            backoff: { type: 'exponential', delay: 2_000, jitter: 0.25 },
-            removeOnComplete: 500,
-            removeOnFail: false,
-          },
-        ),
-      ),
+      ...this.enqueuePendingNotifications(pending[0]),
+      ...this.enqueueOutboxEvents(pending[1]),
+      ...this.enqueueReports(pending[2]),
     ]);
-    const failures = enqueueResults
+    this.assertEnqueueSuccess(enqueueResults);
+  }
+
+  private enqueuePendingNotifications(
+    notifications: Array<{ _id: { toString(): string } }>,
+  ): Promise<unknown>[] {
+    return notifications.map((notification) =>
+      this.notificationsQueue.add(
+        'deliver-internal',
+        { notificationId: notification._id.toString() },
+        this.notificationJobOptions(notification._id.toString()),
+      ),
+    );
+  }
+
+  private enqueueOutboxEvents(
+    events: Array<{ payload: Record<string, unknown>; aggregateId: unknown; id?: string }>,
+  ): Promise<unknown>[] {
+    return events.map(async (event) => {
+      if (!event.id) throw new Error('Outbox event identifier is missing.');
+      const notificationId = String(event.payload.notificationId ?? event.aggregateId);
+      await this.notificationsQueue.add(
+        'deliver-internal',
+        { notificationId },
+        this.notificationJobOptions(notificationId),
+      );
+      await this.outboxService.markDispatched(event.id);
+    });
+  }
+
+  private enqueueReports(
+    reports: Array<{ _id: { toString(): string }; requestedBy: { toString(): string } }>,
+  ): Promise<unknown>[] {
+    return reports.map((report) =>
+      this.reportsQueue.add(
+        'generate-ticket-pdf',
+        { reportId: report._id.toString(), actorId: report.requestedBy.toString() },
+        {
+          jobId: `report-${report._id.toString()}`,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 2_000, jitter: 0.25 },
+          removeOnComplete: 500,
+          removeOnFail: false,
+        },
+      ),
+    );
+  }
+
+  private notificationJobOptions(notificationId: string) {
+    return {
+      jobId: `notification-${notificationId}`,
+      attempts: 3,
+      backoff: { type: 'exponential' as const, delay: 1_000, jitter: 0.25 },
+      removeOnComplete: 1_000,
+      removeOnFail: false,
+    };
+  }
+
+  private assertEnqueueSuccess(results: PromiseSettledResult<unknown>[]): void {
+    const failures = results
       .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
       .map((result) => result.reason as unknown);
     if (failures.length > 0) {

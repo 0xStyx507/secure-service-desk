@@ -13,9 +13,7 @@ import { Attachment, AttachmentSchema } from './schemas/attachment.schema';
     AuditModule,
     AuthModule,
     TicketsModule,
-    MongooseModule.forFeature([
-      { name: Attachment.name, schema: AttachmentSchema },
-    ]),
+    MongooseModule.forFeature([{ name: Attachment.name, schema: AttachmentSchema }]),
   ],
   controllers: [AttachmentsController],
   providers: [AttachmentsService, AttachmentFilePolicyService],

@@ -11,9 +11,7 @@ import { Notification, NotificationSchema } from './schemas/notification.schema'
   imports: [
     AuthModule,
     BullModule.registerQueue({ name: NOTIFICATIONS_QUEUE }),
-    MongooseModule.forFeature([
-      { name: Notification.name, schema: NotificationSchema },
-    ]),
+    MongooseModule.forFeature([{ name: Notification.name, schema: NotificationSchema }]),
   ],
   controllers: [NotificationsController],
   providers: [NotificationsService],

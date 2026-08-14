@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
+import { McpActionStatus } from '../../mcp/mcp-action-status.enum';
 
 export type McpPendingActionDocument = HydratedDocument<McpPendingAction>;
 
@@ -20,6 +21,30 @@ export class McpPendingAction {
   @Prop({ required: true, expires: 0 })
   expiresAt!: Date;
 
+  @Prop({
+    required: true,
+    enum: Object.values(McpActionStatus),
+    default: McpActionStatus.PENDING,
+    index: true,
+  })
+  status!: McpActionStatus;
+
+  @Prop({ type: Date })
+  executingAt?: Date;
+
+  @Prop({ type: Date })
+  completedAt?: Date;
+
+  @Prop({ type: Date })
+  failedAt?: Date;
+
+  @Prop({ maxlength: 64 })
+  failureCode?: string;
+
+  @Prop({ maxlength: 256 })
+  failureMessage?: string;
+
+  // Legacy markers are retained for compatibility with documents created before ADR-022.
   @Prop({ type: Date })
   confirmedAt?: Date;
 

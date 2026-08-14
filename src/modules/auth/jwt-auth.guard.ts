@@ -22,11 +22,7 @@ export class JwtAuthGuard implements CanActivate {
 
     const identity = await this.jwtTokenService.verifyAccessToken(token);
     const user = await this.usersService.findById(identity.sub);
-    if (
-      !user ||
-      user.status !== UserStatus.ACTIVE ||
-      user.authzVersion !== identity.authzVersion
-    ) {
+    if (!user || user.status !== UserStatus.ACTIVE || user.authzVersion !== identity.authzVersion) {
       throw new UnauthorizedException('Access token is no longer valid.');
     }
     request.user = {

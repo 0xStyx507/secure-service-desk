@@ -1,15 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import {
-  IsEnum,
-  IsInt,
-  IsMongoId,
-  IsOptional,
-  IsString,
-  Length,
-  Max,
-  Min,
-} from 'class-validator';
+import { IsEnum, IsInt, IsMongoId, IsOptional, IsString, Length, Max, Min } from 'class-validator';
 import { TicketPriority } from '../ticket-priority.enum';
 import { TicketStatus } from '../ticket-status.enum';
 

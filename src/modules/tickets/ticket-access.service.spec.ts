@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { AuthenticatedUser } from '../auth/auth.types';
 import { Role } from '../auth/roles.enum';
@@ -45,9 +45,9 @@ describe('TicketAccessService', () => {
       authzVersion: 0,
     };
 
-    expect(() =>
-      service.assertCanCreateComment(user, ticket, CommentVisibility.INTERNAL),
-    ).toThrow(ForbiddenException);
+    expect(() => service.assertCanCreateComment(user, ticket, CommentVisibility.INTERNAL)).toThrow(
+      ForbiddenException,
+    );
   });
 
   it('allows support staff to read and add internal comments', () => {
@@ -62,5 +62,14 @@ describe('TicketAccessService', () => {
     expect(() =>
       service.assertCanCreateComment(support, ticket, CommentVisibility.INTERNAL),
     ).not.toThrow();
+  });
+
+  it('rejects content mutations on closed tickets', () => {
+    expect(() =>
+      service.assertCanModifyContent({
+        ...ticket,
+        status: 'CLOSED',
+      } as unknown as TicketDocument),
+    ).toThrow(ConflictException);
   });
 });

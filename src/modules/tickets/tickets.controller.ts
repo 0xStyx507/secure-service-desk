@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -23,6 +24,7 @@ import { Role } from '../auth/roles.enum';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { CreateCommentDto } from './dto/create-comment.dto';
+import { AddTicketWatcherDto } from './dto/add-ticket-watcher.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { ListTicketsDto } from './dto/list-tickets.dto';
 import { ListCommentsDto } from './dto/list-comments.dto';
@@ -54,10 +56,7 @@ export class TicketsController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a visible ticket' })
-  findOne(
-    @Param('id', ParseMongoIdPipe) id: string,
-    @Req() request: AuthenticatedRequest,
-  ) {
+  findOne(@Param('id', ParseMongoIdPipe) id: string, @Req() request: AuthenticatedRequest) {
     return this.ticketsService.findOne(id, request.user);
   }
 
@@ -80,6 +79,28 @@ export class TicketsController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.ticketsService.addComment(id, dto, request.user);
+  }
+
+  @Post(':id/watchers')
+  @Roles(Role.ADMIN, Role.SUPPORT)
+  @ApiOperation({ summary: 'Add an active user as a ticket watcher' })
+  addWatcher(
+    @Param('id', ParseMongoIdPipe) id: string,
+    @Body() dto: AddTicketWatcherDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.ticketsService.addWatcher(id, dto.userId, request.user);
+  }
+
+  @Delete(':id/watchers/:userId')
+  @Roles(Role.ADMIN, Role.SUPPORT)
+  @ApiOperation({ summary: 'Remove a ticket watcher' })
+  removeWatcher(
+    @Param('id', ParseMongoIdPipe) id: string,
+    @Param('userId', ParseMongoIdPipe) userId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.ticketsService.removeWatcher(id, userId, request.user);
   }
 
   @Get(':id/comments')
